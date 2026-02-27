@@ -9,7 +9,14 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "jest",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma db push --force-reset && npm run seed",
+    "db:reset-empty": "prisma db push --force-reset",
+    "user:create": "tsx scripts/create-user.ts",
+    "watchlist:add": "tsx scripts/add-watchlist.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",

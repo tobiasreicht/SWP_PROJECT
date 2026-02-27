@@ -25,7 +25,10 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl = String(error.config?.url || '');
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/auth';
@@ -80,10 +83,27 @@ export const ratingsAPI = {
 
 // ============ Watchlist ============
 export const watchlistAPI = {
-  getAll: () => apiClient.get('/watchlist'),
-  add: (data: { movieId: string; priority?: string }) =>
+  getAll: (params?: { sortBy?: 'addedAt' | 'priority'; sortOrder?: 'asc' | 'desc' }) =>
+    apiClient.get('/watchlist', { params }),
+  add: (data: { movieId: string; priority?: string; status?: 'planned' | 'watching' | 'watched' }) =>
     apiClient.post('/watchlist', data),
+  update: (movieId: string, data: { priority?: 'high' | 'medium' | 'low'; status?: 'planned' | 'watching' | 'watched'; notes?: string }) =>
+    apiClient.patch(`/watchlist/${movieId}`, data),
   remove: (movieId: string) => apiClient.delete(`/watchlist/${movieId}`),
+  getCount: () => apiClient.get('/watchlist/count'),
+};
+
+// ============ Friends & Social ============
+export const friendsAPI = {
+  getAll: () => apiClient.get('/friends'),
+  search: (query: string) => apiClient.get('/friends/search', { params: { q: query } }),
+  add: (data: { friendId?: string; identifier?: string }) =>
+    apiClient.post('/friends/add', data),
+  getRequests: () => apiClient.get('/friends/requests'),
+  acceptRequest: (requestId: string) => apiClient.put(`/friends/${requestId}/accept`),
+  remove: (friendId: string) => apiClient.delete(`/friends/${friendId}`),
+  getActivity: () => apiClient.get('/friends/activity'),
+  getCommonMovies: (friendId: string) => apiClient.get(`/friends/common/${friendId}`),
 };
 
 // ============ Users ============

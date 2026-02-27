@@ -58,9 +58,19 @@ export const Footer: React.FC = () => {
 
         {/* Bottom */}
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-gray-400">
-            © 2026 FilmTracker. All rights reserved.
-          </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <p className="text-sm text-gray-400">© 2026 FilmTracker. All rights reserved.</p>
+            <p className="text-xs text-gray-400 max-w-lg">
+              This product uses the TMDb API but is not endorsed or certified by TMDb.{' '}
+              <a
+                href="https://www.themoviedb.org/about/logos-attribution"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white hover:underline ml-1"
+              >TMDb attribution</a>
+            </p>
+          </div>
+
           <div className="flex gap-6 text-sm text-gray-400">
             <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-white transition-colors">Terms of Service</a>

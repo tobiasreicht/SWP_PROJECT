@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Star, Plus, Play, Check } from 'lucide-react';
 import { Movie } from '../../types';
 import { Card, Badge } from '../ui';
+import { useWatchlistStore } from '../../store';
 
 interface MovieCardProps {
   movie: Movie;
@@ -17,11 +18,38 @@ export const MovieCard: React.FC<MovieCardProps> = ({
   userRating,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { items, addToWatchlist, removeFromWatchlist } = useWatchlistStore();
+
+  const tmdbCandidate = movie.tmdbId || Number(movie.id);
+  const matchedWatchlistItem = items.find((item) => {
+    if (item.movieId === movie.id) {
+      return true;
+    }
+
+    if (!Number.isFinite(tmdbCandidate)) {
+      return false;
+    }
+
+    return item.movie?.tmdbId === tmdbCandidate;
+  });
+
+  const isCurrentlyInWatchlist = isInWatchlist || Boolean(matchedWatchlistItem);
+
+  const handleToggleWatchlist = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    if (matchedWatchlistItem) {
+      await removeFromWatchlist(matchedWatchlistItem.movieId);
+      return;
+    }
+
+    await addToWatchlist(String(movie.tmdbId || movie.id), 'medium');
+  };
 
   return (
     <Card
       variant="hover"
-      className="relative h-80 w-48 overflow-hidden group/card flex-shrink-0"
+      className="relative h-80 w-60 overflow-hidden group/card flex-shrink-0 shadow-lg"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => onSelect(movie)}
@@ -35,13 +63,13 @@ export const MovieCard: React.FC<MovieCardProps> = ({
       />
 
       {/* Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/50 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/40 to-transparent opacity-60 group-hover/card:opacity-100 transition-opacity duration-300" />
 
       {/* Content */}
       {isHovered && (
         <div className="absolute inset-0 flex flex-col justify-end p-4 z-10">
           {/* Title */}
-          <h3 className="text-lg font-bold text-white mb-2 line-clamp-2">
+          <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2">
             {movie.title}
           </h3>
 
@@ -60,13 +88,15 @@ export const MovieCard: React.FC<MovieCardProps> = ({
           </div>
 
           {/* Genres */}
-          <div className="flex gap-1.5 mb-4 flex-wrap">
-            {movie.genres.slice(0, 2).map((genre) => (
+          <div className="flex gap-1.5 mb-3 flex-wrap">
+            {movie.genres && movie.genres.slice(0, 2).map((genre) => (
               <Badge key={genre} variant="outline" className="text-xs">
                 {genre}
               </Badge>
             ))}
           </div>
+
+          {/* (platforms removed from card - displayed in modal) */}
 
           {/* Actions */}
           <div className="flex gap-2">
@@ -82,12 +112,13 @@ export const MovieCard: React.FC<MovieCardProps> = ({
             </button>
             <button
               className={`flex-1 border border-white/30 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                isInWatchlist
+                isCurrentlyInWatchlist
                   ? 'bg-red-600/20 border-red-600'
                   : 'hover:bg-white/10'
               }`}
+              onClick={handleToggleWatchlist}
             >
-              {isInWatchlist ? (
+              {isCurrentlyInWatchlist ? (
                 <>
                   <Check size={16} />
                   Added
@@ -119,13 +150,15 @@ export const MovieCard: React.FC<MovieCardProps> = ({
 
       {/* Title (default view) */}
       {!isHovered && (
-        <div className="absolute bottom-0 inset-x-0 p-3 z-5">
+        <div className="absolute bottom-0 inset-x-0 p-3 z-5 bg-gradient-to-t from-black/60 to-transparent">
           <h3 className="text-sm font-semibold text-white line-clamp-2">
             {movie.title}
           </h3>
           <p className="text-xs text-gray-400 mt-1">
-            {movie.genres[0]} • {movie.releaseDate.toString().split('T')[0]}
+            {movie.genres && movie.genres[0]} • {movie.releaseDate ? movie.releaseDate.toString().split('T')[0] : ''}
           </p>
+
+          {/* streaming platforms intentionally omitted here; see extended view */}
         </div>
       )}
     </Card>

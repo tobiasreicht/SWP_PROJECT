@@ -17,6 +17,56 @@ export async function fetchMovieDetails(tmdbId: number) {
   const director = (data.credits?.crew || []).find((c: any) => c.job === 'Director')?.name;
   const cast = (data.credits?.cast || []).slice(0, 6).map((c: any) => c.name);
 
+  // fetch watch/providers
+  let streamingPlatforms: any[] = [];
+  try {
+    const provResp = await fetch(`${TMDB_BASE}/movie/${tmdbId}/watch/providers?api_key=${tmdbKey()}`);
+    if (provResp.ok) {
+      const provData = await provResp.json();
+      const country = provData.results?.US || provData.results?.DE || provData.results?.GB || provData.results?.KR || provData.results?.IN;
+      const providers = country?.flatrate || country?.rent || country?.buy || [];
+      const mapName = (name: string) => {
+        if (!name) return 'Other';
+        const n = name.toLowerCase();
+        if (n.includes('netflix')) return 'Netflix';
+        if (n.includes('prime') || n.includes('amazon')) return 'Prime Video';
+        if (n.includes('disney')) return "Disney+'";
+        if (n.includes('apple')) return "Apple TV+'";
+        if (n.includes('hbo')) return 'HBO Max';
+        if (n.includes('hulu')) return 'Hulu';
+        return name;
+      };
+
+      streamingPlatforms = (providers || []).map((p: any) => ({
+        platform: mapName(p.provider_name),
+        url: `https://www.themoviedb.org/movie/${tmdbId}/watch`,
+      }));
+    }
+  } catch (e) {
+    // ignore provider errors
+  }
+
+  // fetch trailer/videos
+  let trailerUrl: string | null = null;
+  try {
+    const videoResp = await fetch(`${TMDB_BASE}/movie/${tmdbId}/videos?api_key=${tmdbKey()}`);
+    if (videoResp.ok) {
+      const videoData = await videoResp.json();
+      const videos = videoData.results || [];
+
+      const trailer =
+        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Trailer' && video.official) ||
+        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Trailer') ||
+        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Teaser');
+
+      if (trailer?.key) {
+        trailerUrl = `https://www.youtube-nocookie.com/embed/${trailer.key}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1&playsinline=1&loop=1&playlist=${trailer.key}&iv_load_policy=3&cc_load_policy=0&fs=0&disablekb=1`;
+      }
+    }
+  } catch (e) {
+    // ignore trailer errors
+  }
+
   return {
     tmdbId: data.id,
     title: data.title || data.original_title,
@@ -30,6 +80,8 @@ export async function fetchMovieDetails(tmdbId: number) {
     backdrop: data.backdrop_path ? IMAGE_BASE + data.backdrop_path : '',
     runtime: data.runtime || null,
     rating: typeof data.vote_average === 'number' ? data.vote_average : 0,
+    streamingPlatforms,
+    trailerUrl,
   };
 }
 

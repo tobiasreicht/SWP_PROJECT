@@ -8,6 +8,9 @@ import authRouter from './controllers/auth.js';
 import ratingsRouter from './controllers/ratings.js';
 import watchlistRouter from './controllers/watchlist.js';
 import usersRouter from './controllers/users.js';
+import friendsRouter from './controllers/friends.js';
+import recommendationsRouter from './controllers/recommendations.js';
+import analyticsRouter from './controllers/analytics.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +31,9 @@ app.use('/api/movies', moviesRouter);
 app.use('/api/ratings', ratingsRouter);
 app.use('/api/watchlist', watchlistRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/friends', friendsRouter);
+app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/analytics', analyticsRouter);
 
 // Error Handler
 app.use(errorHandler);

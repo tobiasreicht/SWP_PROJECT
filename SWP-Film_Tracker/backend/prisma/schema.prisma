@@ -69,6 +69,7 @@ model WatchlistItem {
   userId    String
   movieId   String
   priority  String   @default("medium") // "high", "medium", "low"
+  status    String   @default("planned") // "planned", "watching", "watched"
   notes     String?
   addedAt   DateTime @default(now())
 

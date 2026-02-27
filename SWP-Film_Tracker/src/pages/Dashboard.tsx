@@ -1,15 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, Eye, Star } from 'lucide-react';
 import { StatsCard } from '../components/dashboard/StatsCard';
+import { ActivityChart, GenreChart, RatingChart } from '../components/dashboard/Charts';
 import { Card } from '../components/ui';
 import { useAuthStore, useRatingStore } from '../store';
-import { usersAPI } from '../services/api';
+import { analyticsAPI } from '../services/api';
 
 interface DashboardStats {
   totalMoviesWatched: number;
   averageRating: number;
   favoriteGenres: string[];
   genreDistribution: Record<string, number>;
+  monthlyStats: { month: string; count: number; averageRating: number }[];
+  streakDays: number;
+  watchlistCount: number;
+  friendsCount: number;
+  achievements: string[];
 }
 
 export const Dashboard: React.FC = () => {
@@ -25,7 +31,7 @@ export const Dashboard: React.FC = () => {
       try {
         setIsLoading(true);
         await fetchUserRatings();
-        const response = await usersAPI.getStatistics(user.id);
+        const response = await analyticsAPI.getDashboard();
         setStats(response.data);
       } catch (error) {
         console.error('Error loading stats:', error);
@@ -63,7 +69,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="max-w-7xl mx-auto px-4 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+      <div className="max-w-7xl mx-auto px-4 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         <StatsCard
           icon={Eye}
           label="Movies Watched"
@@ -78,40 +84,31 @@ export const Dashboard: React.FC = () => {
         />
         <StatsCard
           icon={Activity}
-          label="Favorite Genre"
-          value={stats.favoriteGenres?.[0] || 'N/A'}
+          label="Current Streak"
+          value={`${stats.streakDays || 0} day${stats.streakDays === 1 ? '' : 's'}`}
           color="blue"
+        />
+        <StatsCard
+          icon={Activity}
+          label="Watchlist Items"
+          value={stats.watchlistCount || 0}
+          color="green"
         />
       </div>
 
-      {/* Genre Distribution and Top Rated */}
+      {/* Charts */}
       <div className="max-w-7xl mx-auto px-4 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
-        {/* Genre Distribution */}
-        <Card className="p-6">
-          <h3 className="text-lg font-bold text-white mb-6">Genre Distribution</h3>
-          {genreArray.length > 0 ? (
-            <div className="space-y-4">
-              {genreArray.slice(0, 6).map((genre) => (
-                <div key={genre.name} className="flex items-center justify-between">
-                  <span className="text-gray-300">{genre.name}</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-red-600 to-red-400"
-                        style={{
-                          width: `${(genre.value / Math.max(...genreArray.map((g) => g.value))) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-gray-400 text-sm min-w-fit">{genre.value}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400">No genre data yet</p>
-          )}
-        </Card>
+        <RatingChart data={stats.monthlyStats || []} />
+        <GenreChart data={genreArray} />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+        <ActivityChart
+          data={(stats.monthlyStats || []).map((item) => ({
+            month: item.month,
+            count: item.count,
+          }))}
+        />
 
         {/* Top Rated Movies */}
         <Card className="p-6">
@@ -152,6 +149,22 @@ export const Dashboard: React.FC = () => {
                 className="px-6 py-3 rounded-lg bg-gradient-to-r from-red-600 to-red-500 text-white font-semibold"
               >
                 {genre}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {stats.achievements && stats.achievements.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 md:px-12 mt-10">
+          <h2 className="text-2xl font-bold text-white mb-6">Achievements</h2>
+          <div className="flex flex-wrap gap-3">
+            {stats.achievements.map((achievement) => (
+              <div
+                key={achievement}
+                className="px-4 py-2 rounded-full bg-white/10 text-white border border-white/10"
+              >
+                {achievement}
               </div>
             ))}
           </div>

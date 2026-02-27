@@ -24,14 +24,14 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      {/* Backdrop */}
+      {/* Backdrop - cinematic dark glass effect */}
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-gradient-to-br from-black/90 via-neutral-900/80 to-black/90 backdrop-blur-[6px] saturate-150"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
-      <div className={clsx('relative bg-gray-900 rounded-lg border border-white/10 shadow-2xl w-full', sizes[size])}>
+      <div className={clsx('relative bg-white/10 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl w-full', sizes[size])}>
         {/* Header */}
         {title && (
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
@@ -46,7 +46,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         )}
         
         {/* Content */}
-        <div className="p-6">
+        <div className="p-0">
           {children}
         </div>
       </div>

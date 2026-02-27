@@ -11,6 +11,11 @@ export const Header: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuthStore();
 
+  const handleLogout = () => {
+    logout();
+    navigate('/auth');
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery) {
@@ -30,12 +35,15 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-b from-neutral-900 via-neutral-900/80 to-transparent backdrop-blur-md border-b border-white/10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
             <span className="text-3xl font-bold text-red-600">
-              🎬 FilmTracker
+              Watch
+            </span>
+             <span className="text-2xl font-bold text-gray-600">
+              Together
             </span>
           </Link>
 
@@ -96,7 +104,7 @@ export const Header: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="flex items-center gap-2"
                 >
                   <LogOut size={16} />

@@ -1,40 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Mail, Lock, User } from 'lucide-react';
 import { Card, Button, Input } from '../components/ui';
-import { authAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store';
 
 export const Auth: React.FC = () => {
+  const { user, isLoading, login, register } = useAuthStore();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
 
     try {
       if (isLogin) {
-        const resp = await authAPI.login({ email, password });
-        const { token, user } = resp.data;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
+        await login(email, password);
         navigate('/');
       } else {
-        const resp = await authAPI.register({ email, username: email.split('@')[0], password, displayName: displayName || email.split('@')[0] });
-        const { token, user } = resp.data;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
+        await register(
+          email,
+          email.split('@')[0],
+          displayName || email.split('@')[0],
+          password
+        );
         navigate('/');
       }
     } catch (error: any) {
       console.error('Auth error:', error?.response?.data || error);
       alert(error?.response?.data?.error || 'Authentication failed');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -143,18 +145,6 @@ export const Auth: React.FC = () => {
           </button>
         </p>
 
-        {/* Demo Account */}
-        {isLogin && (
-          <div className="mt-8 p-4 rounded-lg bg-blue-600/10 border border-blue-600/50">
-            <p className="text-xs text-blue-400 mb-2">Demo Account:</p>
-            <p className="text-xs text-gray-300">
-              Email: <span className="font-mono">demo@example.com</span>
-              </p>
-              <p className="text-xs text-gray-300">
-                Password: <span className="font-mono">demo123</span>
-            </p>
-          </div>
-        )}
       </Card>
     </div>
   );

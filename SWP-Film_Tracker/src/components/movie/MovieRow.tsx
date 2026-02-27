@@ -42,7 +42,7 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieSelect
         {/* Movies Container */}
         <div
           ref={containerRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide px-4 md:px-6 pb-4"
+          className="flex gap-4 overflow-x-auto scrollbar-hide pl-4 md:pl-6 pr-0 pb-4"
           style={{
             scrollBehavior: 'smooth',
             scrollSnapType: 'x mandatory',
@@ -51,7 +51,7 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieSelect
           {movies.map((movie) => (
             <MovieCard
               key={movie.id}
-              movie={movie}
+              movie={movie} 
               onSelect={onMovieSelect}
             />
           ))}

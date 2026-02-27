@@ -1,23 +1,111 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Settings, LogOut, Edit2, Save } from 'lucide-react';
 import { Card, Button, Input, Badge } from '../components/ui';
+import { useAuthStore } from '../store';
+import { usersAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 export const Profile: React.FC = () => {
+  const { user, setUser, logout } = useAuthStore();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
-    displayName: 'John Doe',
-    email: 'john@example.com',
-    bio: 'Movie enthusiast and series binge-watcher',
-    favoriteGenres: ['Sci-Fi', 'Thriller', 'Drama'],
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
+    displayName: '',
+    email: '',
+    bio: '',
+    favoriteGenres: [] as string[],
+    avatar: '',
   });
+  const [stats, setStats] = useState([
+    { label: 'Movies Watched', value: 0 },
+    { label: 'Average Rating', value: '0.0/10' },
+    { label: 'Series Started', value: 0 },
+    { label: 'Friends', value: 0 },
+  ]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const stats = [
-    { label: 'Movies Watched', value: 47 },
-    { label: 'Average Rating', value: '7.8/10' },
-    { label: 'Series Started', value: 12 },
-    { label: 'Friends', value: 8 },
-  ];
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    const loadProfile = async () => {
+      try {
+        setIsLoading(true);
+        const [profileResponse, statsResponse] = await Promise.all([
+          usersAPI.getProfile(user.id),
+          usersAPI.getStatistics(user.id),
+        ]);
+
+        const profileData = profileResponse.data;
+        const statsData = statsResponse.data;
+
+        setProfile((previous) => ({
+          ...previous,
+          displayName: profileData.displayName || user.displayName,
+          email: profileData.email || user.email,
+          bio: profileData.bio || '',
+          avatar: profileData.avatar || '',
+          favoriteGenres: statsData.favoriteGenres || previous.favoriteGenres,
+        }));
+
+        setStats([
+          { label: 'Movies Watched', value: statsData.totalMoviesWatched || 0 },
+          { label: 'Average Rating', value: `${(statsData.averageRating || 0).toFixed(1)}/10` },
+          { label: 'Series Started', value: statsData.totalSeriesWatched || 0 },
+          { label: 'Friends', value: statsData.totalFriends || 0 },
+        ]);
+      } catch (error) {
+        setProfile((previous) => ({
+          ...previous,
+          displayName: user.displayName,
+          email: user.email,
+        }));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [user, navigate]);
+
+  const handleSaveProfile = async () => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      const response = await usersAPI.updateProfile(user.id, {
+        displayName: profile.displayName,
+        bio: profile.bio,
+        avatar: profile.avatar,
+      });
+
+      setUser({
+        ...user,
+        displayName: response.data.displayName || profile.displayName,
+        avatar: response.data.avatar || profile.avatar,
+        bio: response.data.bio || profile.bio,
+      });
+      setIsEditing(false);
+    } catch (error) {
+      alert('Could not save profile changes');
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/auth');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-400">Loading profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -28,7 +116,7 @@ export const Profile: React.FC = () => {
           <div className="flex items-start justify-between mb-6">
             <div className="flex gap-6">
               <img
-                src={profile.avatar}
+                src={profile.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.displayName || profile.email || 'User') + '&background=1f2937&color=ffffff'}
                 alt={profile.displayName}
                 className="w-24 h-24 rounded-lg object-cover"
               />
@@ -48,7 +136,13 @@ export const Profile: React.FC = () => {
             <Button
               variant="secondary"
               size="md"
-              onClick={() => setIsEditing(!isEditing)}
+              onClick={() => {
+                if (isEditing) {
+                  handleSaveProfile();
+                } else {
+                  setIsEditing(true);
+                }
+              }}
               className="flex items-center gap-2"
             >
               {isEditing ? (
@@ -148,6 +242,7 @@ export const Profile: React.FC = () => {
               <Button
                 variant="ghost"
                 className="flex items-center gap-2 text-red-400 hover:text-red-300"
+                  onClick={handleLogout}
               >
                 <LogOut size={18} />
                 Logout

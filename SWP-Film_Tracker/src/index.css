@@ -6,9 +6,19 @@ html, body, #root {
   height: 100%;
 }
 
+html,
 body {
   @apply bg-slate-50 text-slate-900;
   overflow-x: hidden;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* Utility to hide scrollbars for carousels */

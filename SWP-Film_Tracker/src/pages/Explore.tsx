@@ -1,16 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { MovieCard, MovieModal } from '../components/movie';
 import { Movie } from '../types';
 import { moviesAPI } from '../services/api';
+import { useWatchlistStore } from '../store';
 
 export const Explore: React.FC = () => {
+  const { fetchWatchlist, fetchWatchlistCount } = useWatchlistStore();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    fetchWatchlist();
+    fetchWatchlistCount();
+  }, []);
 
   const genres = [
     'Action',

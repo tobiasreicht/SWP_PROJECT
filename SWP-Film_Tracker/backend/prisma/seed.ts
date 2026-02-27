@@ -167,6 +167,7 @@ async function main() {
   // Clear existing data
   await prisma.rating.deleteMany();
   await prisma.watchlistItem.deleteMany();
+  await prisma.friend.deleteMany();
   await prisma.movie.deleteMany();
   await prisma.user.deleteMany();
 
@@ -183,6 +184,29 @@ async function main() {
   });
 
   console.log(`✅ Created sample user: ${user.displayName}`);
+
+  const [friend1, friend2] = await Promise.all([
+    prisma.user.create({
+      data: {
+        email: 'alex@example.com',
+        username: 'alex_j',
+        displayName: 'Alex Johnson',
+        password: await bcrypt.hash('demo123', 10),
+        bio: 'Sci-fi and thriller fan',
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: 'sarah@example.com',
+        username: 'sarah_w',
+        displayName: 'Sarah Williams',
+        password: await bcrypt.hash('demo123', 10),
+        bio: 'Drama lover and weekend binge watcher',
+      },
+    }),
+  ]);
+
+  console.log('✅ Created 2 friend users');
 
   // Create movies
   const createdMovies = await Promise.all(
@@ -216,6 +240,7 @@ async function main() {
     userId: user.id,
     movieId: movie.id,
     priority: ['high', 'medium', 'low'][Math.floor(Math.random() * 3)] as any,
+    status: ['planned', 'watching', 'watched'][Math.floor(Math.random() * 3)] as any,
     notes: 'Want to watch this soon',
   }));
 
@@ -224,6 +249,76 @@ async function main() {
   );
 
   console.log(`✅ Created ${sampleWatchlist.length} watchlist items`);
+
+  const friendRatings1 = createdMovies.slice(2, 8).map((movie, index) => ({
+    userId: friend1.id,
+    movieId: movie.id,
+    rating: Math.min(10, 7 + (index % 4)),
+    review: 'Loved this one!',
+    watchedDate: new Date(Date.now() - (index + 2) * 24 * 60 * 60 * 1000),
+    isFavorite: index % 2 === 0,
+  }));
+
+  const friendRatings2 = createdMovies.slice(1, 7).map((movie, index) => ({
+    userId: friend2.id,
+    movieId: movie.id,
+    rating: Math.min(10, 6 + (index % 5)),
+    review: 'Great watch with friends.',
+    watchedDate: new Date(Date.now() - (index + 3) * 24 * 60 * 60 * 1000),
+    isFavorite: index % 3 === 0,
+  }));
+
+  await Promise.all([
+    ...friendRatings1.map((rating) => prisma.rating.create({ data: rating })),
+    ...friendRatings2.map((rating) => prisma.rating.create({ data: rating })),
+  ]);
+
+  await Promise.all([
+    prisma.watchlistItem.create({
+      data: {
+        userId: friend1.id,
+        movieId: createdMovies[8].id,
+        priority: 'high',
+        status: 'watching',
+        notes: 'Watch before weekend',
+      },
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        userId: friend2.id,
+        movieId: createdMovies[9].id,
+        priority: 'medium',
+        status: 'planned',
+        notes: 'Looks interesting',
+      },
+    }),
+  ]);
+
+  await Promise.all([
+    prisma.friend.create({
+      data: {
+        userId: user.id,
+        friendId: friend1.id,
+        status: 'accepted',
+      },
+    }),
+    prisma.friend.create({
+      data: {
+        userId: friend1.id,
+        friendId: user.id,
+        status: 'accepted',
+      },
+    }),
+    prisma.friend.create({
+      data: {
+        userId: friend2.id,
+        friendId: user.id,
+        status: 'pending',
+      },
+    }),
+  ]);
+
+  console.log('✅ Seeded social graph, friend ratings, and activity data');
   console.log('\n🎬 Database seeding completed!');
   console.log(`\nSample user credentials:`);
   console.log(`  Email: demo@example.com`);

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { Home } from './pages/Home';
@@ -7,8 +8,15 @@ import { Watchlist } from './pages/Watchlist';
 import { Social } from './pages/Social';
 import { Profile } from './pages/Profile';
 import { Auth } from './pages/Auth';
+import { useAuthStore } from './store';
 
 export default function App() {
+  const { initializeAuth } = useAuthStore();
+
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
   return (
     <BrowserRouter>
       <Layout>

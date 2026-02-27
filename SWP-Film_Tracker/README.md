@@ -43,6 +43,47 @@ export default defineConfig([
 ])
 ```
 
+## Database Setup (Users + Watchlist)
+
+Your backend uses Prisma + SQLite and supports users with individual watchlists.
+
+### 1) Initialize database
+
+From `backend/`:
+
+```bash
+npm install
+npm run db:push
+npm run seed
+```
+
+### 2) Create a user
+
+```bash
+npm run user:create -- --email user1@example.com --username user1 --password secret123 --displayName "User One"
+```
+
+### 3) Add a movie to a specific user's watchlist
+
+Using TMDB id:
+
+```bash
+npm run watchlist:add -- --email user1@example.com --tmdbId 550 --priority high --notes "Watch this weekend"
+```
+
+Using existing local movie id:
+
+```bash
+npm run watchlist:add -- --username user1 --movieId <local_movie_id> --priority medium
+```
+
+### Helpful DB commands
+
+```bash
+npm run db:studio   # open Prisma Studio
+npm run db:reset    # reset DB and reseed demo data
+```
+
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js
