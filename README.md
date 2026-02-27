@@ -12,7 +12,7 @@ Die Plattform kombiniert persönliches Tracking, Freundes-Interaktionen und Stre
 https://github.com/tobiasreicht/SWP_PROJECT/wiki  
 
 👉 **Projekt-Management (Notion Workspace)**  
-https://workable-plywood-787.notion.site/2ffb5621b960809b8d30c9a52fe6d163?v=2ffb5621b96080b5bf7c000cff2f27ad  
+[https://workable-plywood-787.notion.site/2ffb5621b960809b8d30c9a52fe6d163?v=2ffb5621b96080b5bf7c000cff2f27ad  ](https://www.notion.so/312b5621b96080ffaaa0e445e0a743b8?v=312b5621b960806baf01000c16bcff3d)
 
 ---
 
