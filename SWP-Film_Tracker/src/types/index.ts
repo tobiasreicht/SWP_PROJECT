@@ -138,6 +138,7 @@ export interface SocialFriend {
   relationId?: string;
   name: string;
   username: string;
+  email?: string;
   avatar?: string;
   tasteMatch: number;
   commonMovies: number;
@@ -174,4 +175,27 @@ export interface FriendSearchResult {
   email: string;
   avatar?: string;
   relationStatus: 'none' | 'pending' | 'accepted' | 'blocked';
+}
+
+export interface MessageAttachmentMovie {
+  tmdbId?: number;
+  title: string;
+  poster?: string;
+}
+
+export interface SocialMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  text?: string | null;
+  movieTmdbId?: number | null;
+  movieTitle?: string | null;
+  moviePoster?: string | null;
+  createdAt: string | Date;
+  readAt?: string | Date | null;
+  sender: {
+    id: string;
+    name: string;
+    avatar?: string;
+  };
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { User, Movie, Rating, WatchlistItem, WatchlistSummary } from '../types';
+import { User, Movie, Rating, WatchlistItem, WatchlistSummary, MessageAttachmentMovie } from '../types';
 import { authAPI, moviesAPI, ratingsAPI, watchlistAPI } from '../services/api';
 
 interface AuthState {
@@ -289,4 +289,37 @@ export const useWatchlistStore = create<WatchlistState>((set) => ({
       console.error('Error removing from watchlist:', error);
     }
   },
+}));
+
+interface MessengerState {
+  isOpen: boolean;
+  selectedFriendId: string | null;
+  sharedMovie: MessageAttachmentMovie | null;
+  openMessenger: (data?: { friendId?: string; movie?: MessageAttachmentMovie }) => void;
+  closeMessenger: () => void;
+  setSelectedFriendId: (friendId: string | null) => void;
+  setSharedMovie: (movie: MessageAttachmentMovie | null) => void;
+}
+
+export const useMessengerStore = create<MessengerState>((set) => ({
+  isOpen: false,
+  selectedFriendId: null,
+  sharedMovie: null,
+
+  openMessenger: (data) =>
+    set({
+      isOpen: true,
+      selectedFriendId: data?.friendId || null,
+      sharedMovie: data?.movie || null,
+    }),
+
+  closeMessenger: () =>
+    set({
+      isOpen: false,
+      selectedFriendId: null,
+      sharedMovie: null,
+    }),
+
+  setSelectedFriendId: (friendId) => set({ selectedFriendId: friendId }),
+  setSharedMovie: (sharedMovie) => set({ sharedMovie }),
 }));

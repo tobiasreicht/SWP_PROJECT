@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Star, Plus, Play, Check } from 'lucide-react';
+import { Star, Plus, Play, Check, Share2 } from 'lucide-react';
 import { Movie } from '../../types';
 import { Card, Badge } from '../ui';
-import { useWatchlistStore } from '../../store';
+import { useMessengerStore, useWatchlistStore } from '../../store';
 
 interface MovieCardProps {
   movie: Movie;
@@ -19,6 +19,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const { items, addToWatchlist, removeFromWatchlist } = useWatchlistStore();
+  const { openMessenger } = useMessengerStore();
 
   const tmdbCandidate = movie.tmdbId || Number(movie.id);
   const matchedWatchlistItem = items.find((item) => {
@@ -134,9 +135,26 @@ export const MovieCard: React.FC<MovieCardProps> = ({
         </div>
       )}
 
+      <button
+        className="absolute top-2 left-2 z-20 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover/card:opacity-100 transition-all duration-200"
+        onClick={(event) => {
+          event.stopPropagation();
+          openMessenger({
+            movie: {
+              tmdbId: movie.tmdbId,
+              title: movie.title,
+              poster: movie.poster,
+            },
+          });
+        }}
+        aria-label="Share movie"
+      >
+        <Share2 size={14} />
+      </button>
+
       {/* Rating Badge (top-left) */}
       {userRating && (
-        <div className="absolute top-2 left-2 bg-red-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm z-20">
+        <div className="absolute top-14 left-2 bg-red-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm z-20">
           {userRating}
         </div>
       )}

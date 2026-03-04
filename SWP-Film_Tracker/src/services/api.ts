@@ -106,6 +106,17 @@ export const friendsAPI = {
   getCommonMovies: (friendId: string) => apiClient.get(`/friends/common/${friendId}`),
 };
 
+// ============ Messages ============
+export const messagesAPI = {
+  getInbox: () => apiClient.get('/messages/inbox'),
+  markInboxRead: (data?: { senderId?: string }) => apiClient.post('/messages/inbox/read', data || {}),
+  getConversation: (friendId: string) => apiClient.get(`/messages/${friendId}`),
+  send: (
+    friendId: string,
+    data: { text?: string; movieTmdbId?: number; movieTitle?: string; moviePoster?: string }
+  ) => apiClient.post(`/messages/${friendId}`, data),
+};
+
 // ============ Users ============
 export const usersAPI = {
   getProfile: (userId: string) => apiClient.get(`/users/${userId}`),

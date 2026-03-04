@@ -1,21 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, ActivitySquare } from 'lucide-react';
+import { Users, ActivitySquare, MessageCircle } from 'lucide-react';
 import { FriendCard, ActivityFeedItem } from '../components/social';
 import { Card, Button } from '../components/ui';
-import { friendsAPI, recommendationsAPI } from '../services/api';
+import { friendsAPI, recommendationsAPI, messagesAPI } from '../services/api';
+import { useMessengerStore } from '../store';
 import {
   FriendRequest,
   FriendSearchResult,
   JointRecommendation,
   SocialActivityItem,
   SocialFriend,
+  SocialMessage,
 } from '../types';
 
 export const Social: React.FC = () => {
+  const { openMessenger } = useMessengerStore();
   const [friends, setFriends] = useState<SocialFriend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [activityFeed, setActivityFeed] = useState<SocialActivityItem[]>([]);
   const [jointRecs, setJointRecs] = useState<JointRecommendation[]>([]);
+  const [inbox, setInbox] = useState<SocialMessage[]>([]);
   const [identifier, setIdentifier] = useState('');
   const [searchResults, setSearchResults] = useState<FriendSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -33,10 +37,11 @@ export const Social: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      const [friendsResponse, requestsResponse, activityResponse] = await Promise.all([
+      const [friendsResponse, requestsResponse, activityResponse, inboxResponse] = await Promise.all([
         friendsAPI.getAll(),
         friendsAPI.getRequests(),
         friendsAPI.getActivity(),
+        messagesAPI.getInbox(),
       ]);
 
       const loadedFriends = (friendsResponse.data || []) as SocialFriend[];
@@ -49,6 +54,7 @@ export const Social: React.FC = () => {
           timestamp: new Date(item.timestamp),
         }))
       );
+      setInbox((inboxResponse.data || []) as SocialMessage[]);
 
       const firstFriendId = loadedFriends[0]?.id;
       const activeFriendId = selectedFriendId || firstFriendId;
@@ -121,8 +127,12 @@ export const Social: React.FC = () => {
       const recommendationsResponse = await recommendationsAPI.getJoint(friendId);
       setJointRecs((recommendationsResponse.data || []) as JointRecommendation[]);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Could not load joint recommendations');
+      setError(err.response?.data?.error || 'Could not load social details');
     }
+  };
+
+  const handleMessageFriend = (friendId: string) => {
+    openMessenger({ friendId });
   };
 
   return (
@@ -211,6 +221,7 @@ export const Social: React.FC = () => {
                       avatar={friend.avatar}
                       tasteMatch={friend.tasteMatch}
                       commonMovies={friend.commonMovies}
+                      onMessage={handleMessageFriend}
                       isAdded
                     />
                   </div>
@@ -229,6 +240,35 @@ export const Social: React.FC = () => {
               {/* Tabs */}
               <div className="space-y-6">
                 {/* Activity Feed */}
+                <div className="border-b border-white/10 pb-6">
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-4">
+                    <MessageCircle size={24} />
+                    Inbox
+                  </h2>
+
+                  <div className="max-h-80 overflow-y-auto overflow-x-hidden scrollbar-hide space-y-2 pr-1">
+                    {inbox.length === 0 ? (
+                      <p className="text-sm text-gray-400">No incoming messages yet.</p>
+                    ) : (
+                      inbox.map((message) => (
+                        <button
+                          key={message.id}
+                          type="button"
+                          onClick={() => openMessenger({ friendId: message.senderId })}
+                          className="w-full text-left rounded-lg p-3 bg-white/5 hover:bg-white/10 transition-colors"
+                        >
+                          <p className="text-xs text-gray-400 mb-1">From {message.sender.name}</p>
+                          {message.movieTitle && (
+                            <p className="text-sm text-red-300 mb-1">🎬 {message.movieTitle}</p>
+                          )}
+                          {message.text && <p className="text-sm text-white line-clamp-2 break-words">{message.text}</p>}
+                          <p className="text-[11px] text-gray-500 mt-2">{new Date(message.createdAt).toLocaleString()}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-6">
                     <ActivitySquare size={24} />

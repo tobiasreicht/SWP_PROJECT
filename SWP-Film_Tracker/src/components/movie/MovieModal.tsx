@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Star, Plus, Check, Share2, Heart, ExternalLink } from 'lucide-react';
 import { Movie, Rating } from '../../types';
 import { Modal, Button, Badge } from '../ui';
-import { useRatingStore, useWatchlistStore } from '../../store';
+import { useMessengerStore, useRatingStore, useWatchlistStore } from '../../store';
 import { moviesAPI } from '../../services/api';
 
 interface MovieModalProps {
@@ -18,6 +18,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
 }) => {
   const { createRating } = useRatingStore();
   const { items: watchlistItems, fetchWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlistStore();
+  const { openMessenger } = useMessengerStore();
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [reviewText, setReviewText] = useState('');
   const [platforms, setPlatforms] = useState(movie?.streamingPlatforms || []);
@@ -98,7 +99,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   return (
 
     <Modal isOpen={isOpen} onClose={onClose} size="xxl">
-      <div className="relative bg-black/5 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-6 overflow-hidden">
+      <div className="relative bg-gradient-to-br from-neutral-900/95 via-black/85 to-neutral-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-5 md:p-6 overflow-hidden max-h-[90vh]">
         <button
           aria-label="Close"
           className="absolute right-3 top-3 z-30 bg-white/20 hover:bg-white/30 rounded-full p-2 text-white backdrop-blur-md"
@@ -106,17 +107,17 @@ export const MovieModal: React.FC<MovieModalProps> = ({
         >
           <X size={18} />
         </button>
-        <div className="flex flex-col lg:flex-row gap-10">
+        <div className="flex flex-col lg:flex-row gap-6 md:gap-8 h-[min(860px,calc(90vh-2.5rem))] overflow-hidden pt-2">
           {/* Poster */}
-          <div className="lg:w-80 w-full flex-shrink-0">
+          <div className="lg:w-72 xl:w-80 w-full flex-shrink-0 self-start">
             <img
               src={movie.poster}
               alt={movie.title}
-              className="w-full rounded-xl object-cover max-h-[520px] mx-auto shadow-lg border border-white/10"
+              className="w-full rounded-xl object-cover max-h-[48vh] lg:max-h-[74vh] mx-auto shadow-lg border border-white/10"
             />
           </div>
           {/* Content */}
-          <div className="flex-1 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pr-1 md:pr-2 space-y-6">
             {/* Title */}
             <div>
               <h1 className="text-4xl font-extrabold text-white mb-2 drop-shadow-lg">{movie.title}</h1>
@@ -148,12 +149,12 @@ export const MovieModal: React.FC<MovieModalProps> = ({
               {movie.description}
             </p>
             {/* Where to watch */}
-            <div className="mt-2 ">
+            <div className="mt-2">
               <h3 className="text-white font-semibold mb-2 text-xl">Where to watch</h3>
               {loadingPlatforms ? (
                 <p className="text-gray-400">Loading platforms…</p>
               ) : platforms && platforms.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 h-15">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                   {platforms.map((p) => (
                     <a
                       key={p.platform}
@@ -252,10 +253,17 @@ export const MovieModal: React.FC<MovieModalProps> = ({
                 variant="ghost"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigator.share?.({ title: movie.title, text: movie.description });
+                  openMessenger({
+                    movie: {
+                      tmdbId: movie.tmdbId,
+                      title: movie.title,
+                      poster: movie.poster,
+                    },
+                  });
                 }}
               >
                 <Share2 size={16} />
+                Share
               </Button>
             </div>
           </div>

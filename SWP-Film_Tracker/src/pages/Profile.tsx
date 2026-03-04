@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Settings, LogOut, Edit2, Save } from 'lucide-react';
-import { Card, Button, Input, Badge } from '../components/ui';
+import { Card, Button, Badge } from '../components/ui';
 import { useAuthStore } from '../store';
 import { usersAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +9,8 @@ export const Profile: React.FC = () => {
   const { user, setUser, logout } = useAuthStore();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState({
     displayName: '',
     email: '',
@@ -70,6 +72,68 @@ export const Profile: React.FC = () => {
     loadProfile();
   }, [user, navigate]);
 
+  const resizeAvatar = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const image = new Image();
+        image.onload = () => {
+          const maxSize = 512;
+          const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+          const targetWidth = Math.round(image.width * scale);
+          const targetHeight = Math.round(image.height * scale);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+
+          const context = canvas.getContext('2d');
+          if (!context) {
+            reject(new Error('Could not process image'));
+            return;
+          }
+
+          context.drawImage(image, 0, 0, targetWidth, targetHeight);
+          resolve(canvas.toDataURL('image/jpeg', 0.88));
+        };
+
+        image.onerror = () => reject(new Error('Invalid image file'));
+        image.src = String(reader.result);
+      };
+
+      reader.onerror = () => reject(new Error('Could not read image file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleAvatarSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    try {
+      setIsProcessingAvatar(true);
+      const optimizedAvatar = await resizeAvatar(file);
+      setProfile((previous) => ({
+        ...previous,
+        avatar: optimizedAvatar,
+      }));
+    } catch {
+      alert('Could not process selected image');
+    } finally {
+      setIsProcessingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!user) {
       return;
@@ -115,11 +179,32 @@ export const Profile: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-start justify-between mb-6">
             <div className="flex gap-6">
-              <img
-                src={profile.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.displayName || profile.email || 'User') + '&background=1f2937&color=ffffff'}
-                alt={profile.displayName}
-                className="w-24 h-24 rounded-lg object-cover"
-              />
+              <div className="flex flex-col items-center gap-3">
+                <img
+                  src={profile.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.displayName || profile.email || 'User') + '&background=1f2937&color=ffffff'}
+                  alt={profile.displayName}
+                  className="w-24 h-24 rounded-xl object-cover ring-2 ring-white/10"
+                />
+                {isEditing && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarSelection}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isProcessingAvatar}
+                    >
+                      {isProcessingAvatar ? 'Processing…' : 'Change Photo'}
+                    </Button>
+                  </>
+                )}
+              </div>
               <div>
                 <h1 className="text-3xl font-bold text-white mb-2">{profile.displayName}</h1>
                 <p className="text-gray-400 mb-3">{profile.email}</p>

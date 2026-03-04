@@ -163,8 +163,8 @@ router.get('/', authMiddleware, async (req: any, res) => {
         OR: [{ userId: req.userId }, { friendId: req.userId }],
       },
       include: {
-        user: { select: { id: true, username: true, displayName: true, avatar: true } },
-        friend: { select: { id: true, username: true, displayName: true, avatar: true } },
+        user: { select: { id: true, username: true, displayName: true, avatar: true, email: true } },
+        friend: { select: { id: true, username: true, displayName: true, avatar: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -180,6 +180,7 @@ router.get('/', authMiddleware, async (req: any, res) => {
           relationId: relation.id,
           name: friend.displayName || friend.username,
           username: friend.username,
+          email: friend.email,
           avatar: friend.avatar,
           ...stats,
           status: relation.status,

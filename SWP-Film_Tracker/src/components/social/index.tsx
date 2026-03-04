@@ -9,6 +9,7 @@ interface FriendCardProps {
   tasteMatch?: number;
   commonMovies?: number;
   onAddFriend?: () => void;
+  onMessage?: (friendId: string) => void;
   isAdded?: boolean;
 }
 
@@ -19,6 +20,7 @@ export const FriendCard: React.FC<FriendCardProps> = ({
   tasteMatch,
   commonMovies,
   onAddFriend,
+  onMessage,
   isAdded = false,
 }) => {
   return (
@@ -67,7 +69,15 @@ export const FriendCard: React.FC<FriendCardProps> = ({
               <Heart size={14} className="fill-red-600 text-red-600" />
               Friends
             </Button>
-            <Button variant="secondary" size="sm" className="flex-1 flex items-center justify-center gap-1">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1 flex items-center justify-center gap-1"
+              onClick={(event) => {
+                event.stopPropagation();
+                onMessage?.(id);
+              }}
+            >
               <MessageCircle size={14} />
               Message
             </Button>

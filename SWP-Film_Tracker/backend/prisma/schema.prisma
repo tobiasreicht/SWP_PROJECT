@@ -25,6 +25,8 @@ model User {
   watchlist WatchlistItem[]
   friends   Friend[] @relation("UserFriends")
   friendOf  Friend[] @relation("FriendUser")
+  messagesSent     Message[] @relation("MessageSender")
+  messagesReceived Message[] @relation("MessageRecipient")
 }
 
 model Movie {
@@ -90,4 +92,21 @@ model Friend {
   friend User @relation("FriendUser", fields: [friendId], references: [id], onDelete: Cascade)
 
   @@unique([userId, friendId])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  recipientId String
+  text        String?
+  movieTmdbId Int?
+  movieTitle  String?
+  moviePoster String?
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+
+  sender    User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, recipientId, createdAt])
 }

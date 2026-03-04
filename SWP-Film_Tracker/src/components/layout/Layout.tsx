@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { Header } from './Header';
 import { Footer } from './Footer';
+import { ChatWindowModal } from '../chat';
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,6 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, showFooter = true }) =
         {children}
       </main>
       {showFooter && <Footer />}
+      <ChatWindowModal />
     </div>
   );
 };

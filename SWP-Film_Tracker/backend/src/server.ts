@@ -11,6 +11,7 @@ import usersRouter from './controllers/users.js';
 import friendsRouter from './controllers/friends.js';
 import recommendationsRouter from './controllers/recommendations.js';
 import analyticsRouter from './controllers/analytics.js';
+import messagesRouter from './controllers/messages.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,6 +35,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/friends', friendsRouter);
 app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/messages', messagesRouter);
 
 // Error Handler
 app.use(errorHandler);

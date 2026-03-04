@@ -29,3 +29,12 @@ body::-webkit-scrollbar {
 .scrollbar-hide::-webkit-scrollbar {
   display: none; /* WebKit */
 }
+
+/* Utility to hide only horizontal scrollbar while keeping vertical scrolling */
+.scrollbar-x-hide {
+  overflow-x: hidden;
+}
+
+.scrollbar-x-hide::-webkit-scrollbar:horizontal {
+  height: 0;
+}
