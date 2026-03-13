@@ -5,6 +5,7 @@ import { Modal, Button } from '../ui';
 import { friendsAPI, messagesAPI, moviesAPI } from '../../services/api';
 import { MessageAttachmentMovie, Movie, SocialFriend, SocialMessage } from '../../types';
 import { useAuthStore, useMessengerStore } from '../../store';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../../utils/media';
 
 export const ChatWindowModal: React.FC = () => {
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -31,6 +32,7 @@ export const ChatWindowModal: React.FC = () => {
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isMovieModalOpen, setIsMovieModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const posterFallback = getPosterFallbackUrl();
 
   const selectedFriend = useMemo(
     () => friends.find((friend) => friend.id === selectedFriendId),
@@ -279,8 +281,15 @@ export const ChatWindowModal: React.FC = () => {
                       disabled={isOpeningMovie}
                       className="w-full text-left flex items-center gap-2 p-2 rounded bg-black/20 border border-white/10 mb-2 hover:bg-black/30 transition-colors disabled:opacity-60"
                     >
-                      {message.moviePoster ? (
-                        <img src={message.moviePoster} alt={message.movieTitle} className="w-8 h-12 rounded object-cover" />
+                      {message.movieTitle ? (
+                        <img
+                          src={resolvePosterUrl(message.moviePoster)}
+                          alt={message.movieTitle}
+                          className="w-8 h-12 rounded object-cover"
+                          onError={(event) => {
+                            event.currentTarget.src = posterFallback;
+                          }}
+                        />
                       ) : null}
                       <p className="text-sm text-white">🎬 {message.movieTitle}</p>
                     </button>

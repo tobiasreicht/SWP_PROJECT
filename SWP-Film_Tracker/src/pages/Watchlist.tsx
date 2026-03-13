@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { Card, Button } from '../components/ui';
 import { useRatingStore, useWatchlistStore } from '../store';
 import { WatchlistItem } from '../types';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../utils/media';
 
 export const Watchlist: React.FC = () => {
   const {
@@ -21,6 +22,7 @@ export const Watchlist: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [ratingDrafts, setRatingDrafts] = useState<Record<string, number>>({});
+  const posterFallback = getPosterFallbackUrl();
 
   useEffect(() => {
     fetchWatchlist({ sortBy, sortOrder });
@@ -200,11 +202,14 @@ export const Watchlist: React.FC = () => {
                   priorityColors[item.priority as keyof typeof priorityColors]
                 }`}
               >
-                {item.movie?.poster && (
+                {item.movie && (
                   <img
-                    src={item.movie.poster}
+                    src={resolvePosterUrl(item.movie.poster)}
                     alt={item.movie.title}
                     className="w-20 h-28 object-cover rounded-md flex-shrink-0"
+                    onError={(event) => {
+                      event.currentTarget.src = posterFallback;
+                    }}
                   />
                 )}
 

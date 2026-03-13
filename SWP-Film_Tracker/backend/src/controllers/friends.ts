@@ -34,6 +34,20 @@ const getTasteMatch = async (userId: string, friendId: string) => {
   return { tasteMatch, commonMovies: common.length };
 };
 
+const isAcceptedFriend = async (userId: string, friendId: string) => {
+  const relation = await prisma.friend.findFirst({
+    where: {
+      status: 'accepted',
+      OR: [
+        { userId, friendId },
+        { userId: friendId, friendId: userId },
+      ],
+    },
+  });
+
+  return Boolean(relation);
+};
+
 router.post('/add', authMiddleware, async (req: any, res) => {
   try {
     const { friendId, identifier } = req.body as { friendId?: string; identifier?: string };
@@ -169,7 +183,7 @@ router.get('/', authMiddleware, async (req: any, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    const friends = await Promise.all(
+    const friendEntries = await Promise.all(
       relations.map(async (relation) => {
         const isDirect = relation.userId === req.userId;
         const friend = isDirect ? relation.friend : relation.user;
@@ -184,8 +198,29 @@ router.get('/', authMiddleware, async (req: any, res) => {
           avatar: friend.avatar,
           ...stats,
           status: relation.status,
+          createdAt: relation.createdAt,
         };
       })
+    );
+
+    // Because accepted relations are stored in both directions, dedupe by friend id.
+    const uniqueFriendMap = new Map<string, (typeof friendEntries)[number]>();
+    friendEntries.forEach((entry) => {
+      const existing = uniqueFriendMap.get(entry.id);
+      if (!existing) {
+        uniqueFriendMap.set(entry.id, entry);
+        return;
+      }
+
+      const existingTime = new Date(existing.createdAt).getTime();
+      const currentTime = new Date(entry.createdAt).getTime();
+      if (currentTime > existingTime) {
+        uniqueFriendMap.set(entry.id, entry);
+      }
+    });
+
+    const friends = Array.from(uniqueFriendMap.values()).sort(
+      (a, b) => b.tasteMatch - a.tasteMatch || a.name.localeCompare(b.name)
     );
 
     res.json(friends);
@@ -293,8 +328,12 @@ router.get('/activity', authMiddleware, async (req: any, res) => {
       },
     });
 
-    const friendIds = relations.map((relation) =>
-      relation.userId === req.userId ? relation.friendId : relation.userId
+    const friendIds = Array.from(
+      new Set(
+        relations.map((relation) =>
+          relation.userId === req.userId ? relation.friendId : relation.userId
+        )
+      )
     );
 
     if (friendIds.length === 0) {
@@ -382,6 +421,82 @@ router.get('/common/:friendId', authMiddleware, async (req: any, res) => {
     );
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch common movies' });
+  }
+});
+
+router.get('/profile/:friendId', authMiddleware, async (req: any, res) => {
+  try {
+    const { friendId } = req.params;
+
+    const allowed = await isAcceptedFriend(req.userId, friendId);
+    if (!allowed) {
+      return res.status(403).json({ error: 'You can only view accepted friends' });
+    }
+
+    const [friend, stats, commonMovies, recentRatings, watchlistCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: friendId },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+          createdAt: true,
+        },
+      }),
+      getTasteMatch(req.userId, friendId),
+      prisma.rating.findMany({
+        where: { userId: req.userId },
+        select: { movieId: true },
+      }).then(async (myRatings) => {
+        const myIds = new Set(myRatings.map((item) => item.movieId));
+        const friendRatings = await prisma.rating.findMany({ where: { userId: friendId } });
+        return friendRatings.filter((item) => myIds.has(item.movieId)).length;
+      }),
+      prisma.rating.findMany({
+        where: { userId: friendId },
+        include: {
+          movie: {
+            select: {
+              id: true,
+              title: true,
+              poster: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+      }),
+      prisma.watchlistItem.count({ where: { userId: friendId } }),
+    ]);
+
+    if (!friend) {
+      return res.status(404).json({ error: 'Friend not found' });
+    }
+
+    const averageRating =
+      recentRatings.length > 0
+        ? Number((recentRatings.reduce((sum, item) => sum + item.rating, 0) / recentRatings.length).toFixed(1))
+        : 0;
+
+    res.json({
+      profile: friend,
+      stats: {
+        tasteMatch: stats.tasteMatch,
+        commonMovies,
+        watchlistCount,
+        recentAverageRating: averageRating,
+      },
+      recentRatings: recentRatings.map((item) => ({
+        id: item.id,
+        rating: item.rating,
+        createdAt: item.createdAt,
+        movie: item.movie,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch friend profile' });
   }
 });
 

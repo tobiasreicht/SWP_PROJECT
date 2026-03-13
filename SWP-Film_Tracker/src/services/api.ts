@@ -45,6 +45,8 @@ export const authAPI = {
     apiClient.post('/auth/login', data),
   getCurrentUser: () => apiClient.get('/auth/me'),
   logout: () => apiClient.post('/auth/logout'),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    apiClient.post('/auth/change-password', data),
 };
 
 // ============ Movies ============
@@ -96,6 +98,7 @@ export const watchlistAPI = {
 // ============ Friends & Social ============
 export const friendsAPI = {
   getAll: () => apiClient.get('/friends'),
+  getProfile: (friendId: string) => apiClient.get(`/friends/profile/${friendId}`),
   search: (query: string) => apiClient.get('/friends/search', { params: { q: query } }),
   add: (data: { friendId?: string; identifier?: string }) =>
     apiClient.post('/friends/add', data),
@@ -122,6 +125,7 @@ export const usersAPI = {
   getProfile: (userId: string) => apiClient.get(`/users/${userId}`),
   getStatistics: (userId: string) => apiClient.get(`/users/${userId}/statistics`),
   updateProfile: (userId: string, data: any) => apiClient.put(`/users/${userId}`, data),
+  deleteAccount: (userId: string) => apiClient.delete(`/users/${userId}`),
 };
 
 // ============ Analytics ============

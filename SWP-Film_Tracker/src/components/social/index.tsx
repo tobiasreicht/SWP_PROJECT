@@ -1,30 +1,44 @@
 import React from 'react';
 import { User, UserPlus, Heart, MessageCircle } from 'lucide-react';
 import { Card, Button, Badge } from '../ui';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../../utils/media';
 
 interface FriendCardProps {
   id: string;
   name: string;
+  username?: string;
   avatar?: string;
   tasteMatch?: number;
   commonMovies?: number;
+  onViewProfile?: (friendId: string) => void;
+  onSelect?: (friendId: string) => void;
   onAddFriend?: () => void;
   onMessage?: (friendId: string) => void;
   isAdded?: boolean;
+  isSelected?: boolean;
 }
 
 export const FriendCard: React.FC<FriendCardProps> = ({
   id,
   name,
+  username,
   avatar,
   tasteMatch,
   commonMovies,
+  onViewProfile,
+  onSelect,
   onAddFriend,
   onMessage,
   isAdded = false,
+  isSelected = false,
 }) => {
   return (
-    <Card className="p-4 hover:border-red-500/50 transition-all">
+    <Card
+      className={`p-4 transition-all cursor-pointer ${
+        isSelected ? 'border-red-500/70 bg-red-500/10' : 'hover:border-red-500/50'
+      }`}
+      onClick={() => onSelect?.(id)}
+    >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           {avatar ? (
@@ -40,6 +54,7 @@ export const FriendCard: React.FC<FriendCardProps> = ({
           )}
           <div>
             <h3 className="font-semibold text-white">{name}</h3>
+            {username && <p className="text-xs text-gray-400">@{username}</p>}
             {commonMovies && (
               <p className="text-xs text-gray-400">{commonMovies} common movies</p>
             )}
@@ -65,12 +80,20 @@ export const FriendCard: React.FC<FriendCardProps> = ({
       <div className="flex gap-2">
         {isAdded ? (
           <>
-            <Button variant="ghost" size="sm" className="flex-1 flex items-center justify-center gap-1">
-              <Heart size={14} className="fill-red-600 text-red-600" />
-              Friends
-            </Button>
             <Button
               variant="secondary"
+              size="sm"
+              className="flex-1 flex items-center justify-center gap-1"
+              onClick={(event) => {
+                event.stopPropagation();
+                onViewProfile?.(id);
+              }}
+            >
+              <Heart size={14} className="fill-red-600 text-red-600" />
+              Profile
+            </Button>
+            <Button
+              variant="ghost"
               size="sm"
               className="flex-1 flex items-center justify-center gap-1"
               onClick={(event) => {
@@ -116,6 +139,7 @@ export const ActivityFeedItem: React.FC<ActivityFeedItemProps> = ({
   rating,
   timestamp,
 }) => {
+  const posterFallback = getPosterFallbackUrl();
   const getActionText = () => {
     switch (action) {
       case 'watched':
@@ -147,9 +171,12 @@ export const ActivityFeedItem: React.FC<ActivityFeedItemProps> = ({
   return (
     <div className="flex gap-4 p-4 border-b border-white/10 hover:bg-white/5 transition-colors">
       <img
-        src={moviePoster}
+        src={resolvePosterUrl(moviePoster)}
         alt={movieTitle}
         className="w-12 h-16 rounded object-cover flex-shrink-0"
+        onError={(event) => {
+          event.currentTarget.src = posterFallback;
+        }}
       />
       <div className="flex-1">
         <p className="text-white">

@@ -199,3 +199,30 @@ export interface SocialMessage {
     avatar?: string;
   };
 }
+
+export interface SocialFriendProfile {
+  profile: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatar?: string;
+    bio?: string;
+    createdAt: string | Date;
+  };
+  stats: {
+    tasteMatch: number;
+    commonMovies: number;
+    watchlistCount: number;
+    recentAverageRating: number;
+  };
+  recentRatings: Array<{
+    id: string;
+    rating: number;
+    createdAt: string | Date;
+    movie: {
+      id: string;
+      title: string;
+      poster: string;
+    };
+  }>;
+}

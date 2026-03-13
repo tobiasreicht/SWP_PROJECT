@@ -38,3 +38,36 @@ body::-webkit-scrollbar {
 .scrollbar-x-hide::-webkit-scrollbar:horizontal {
   height: 0;
 }
+
+/* ── Light mode overrides ──────────────────────────────────────────────── */
+html.light-mode .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+html.light-mode .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+html.light-mode .border-white\/20 {
+  border-color: rgba(0, 0, 0, 0.18) !important;
+}
+html.light-mode .text-white {
+  color: #111827 !important;
+}
+html.light-mode .text-gray-300 {
+  color: #374151 !important;
+}
+html.light-mode .text-gray-400 {
+  color: #6b7280 !important;
+}
+html.light-mode .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+html.light-mode .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+html.light-mode .bg-gray-700 {
+  background-color: #e5e7eb !important;
+  color: #111827 !important;
+}
+html.light-mode .hover\:bg-gray-600:hover {
+  background-color: #d1d5db !important;
+}

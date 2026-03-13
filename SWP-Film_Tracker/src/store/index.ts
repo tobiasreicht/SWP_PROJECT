@@ -323,3 +323,114 @@ export const useMessengerStore = create<MessengerState>((set) => ({
   setSelectedFriendId: (friendId) => set({ selectedFriendId: friendId }),
   setSharedMovie: (sharedMovie) => set({ sharedMovie }),
 }));
+
+// ─── Settings Store ────────────────────────────────────────────────────────
+
+export interface SettingsNotifications {
+  friendRequests: boolean;
+  newReleases: boolean;
+  friendActivity: boolean;
+  weeklyDigest: boolean;
+}
+
+export interface SettingsPrivacy {
+  profileVisibility: 'public' | 'friends' | 'private';
+  showWatchlist: boolean;
+  showRatings: boolean;
+  showActivity: boolean;
+  allowFriendRequests: boolean;
+}
+
+export interface SettingsContent {
+  defaultType: 'all' | 'movies' | 'series';
+  defaultSort: 'addedAt' | 'rating' | 'title';
+  itemsPerPage: 10 | 20 | 50;
+}
+
+interface SettingsState {
+  theme: 'dark' | 'light';
+  notifications: SettingsNotifications;
+  privacy: SettingsPrivacy;
+  content: SettingsContent;
+  setTheme: (theme: 'dark' | 'light') => void;
+  setNotification: (key: keyof SettingsNotifications, value: boolean) => void;
+  setPrivacy: (key: keyof SettingsPrivacy, value: any) => void;
+  setContent: (key: keyof SettingsContent, value: any) => void;
+}
+
+const SETTINGS_STORAGE_KEY = 'film-tracker-settings';
+
+const DEFAULT_SETTINGS: Omit<SettingsState, 'setTheme' | 'setNotification' | 'setPrivacy' | 'setContent'> = {
+  theme: 'dark',
+  notifications: {
+    friendRequests: true,
+    newReleases: true,
+    friendActivity: false,
+    weeklyDigest: false,
+  },
+  privacy: {
+    profileVisibility: 'public',
+    showWatchlist: true,
+    showRatings: true,
+    showActivity: true,
+    allowFriendRequests: true,
+  },
+  content: {
+    defaultType: 'all',
+    defaultSort: 'addedAt',
+    itemsPerPage: 20,
+  },
+};
+
+const loadSettings = () => {
+  try {
+    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        theme: parsed.theme ?? DEFAULT_SETTINGS.theme,
+        notifications: { ...DEFAULT_SETTINGS.notifications, ...parsed.notifications },
+        privacy: { ...DEFAULT_SETTINGS.privacy, ...parsed.privacy },
+        content: { ...DEFAULT_SETTINGS.content, ...parsed.content },
+      };
+    }
+  } catch {}
+  return DEFAULT_SETTINGS;
+};
+
+const persistSettings = (state: SettingsState) => {
+  const { setTheme, setNotification, setPrivacy, setContent, ...data } = state;
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(data));
+};
+
+export const useSettingsStore = create<SettingsState>((set) => ({
+  ...loadSettings(),
+
+  setTheme: (theme) =>
+    set((state) => {
+      const next = { ...state, theme };
+      persistSettings(next);
+      return { theme };
+    }),
+
+  setNotification: (key, value) =>
+    set((state) => {
+      const notifications = { ...state.notifications, [key]: value };
+      persistSettings({ ...state, notifications });
+      return { notifications };
+    }),
+
+  setPrivacy: (key, value) =>
+    set((state) => {
+      const privacy = { ...state.privacy, [key]: value };
+      persistSettings({ ...state, privacy });
+      return { privacy };
+    }),
+
+  setContent: (key, value) =>
+    set((state) => {
+      const content = { ...state.content, [key]: value };
+      persistSettings({ ...state, content });
+      return { content };
+    }),
+}));

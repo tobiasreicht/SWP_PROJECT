@@ -3,6 +3,7 @@ import { Star, Plus, Play, Check, Share2 } from 'lucide-react';
 import { Movie } from '../../types';
 import { Card, Badge } from '../ui';
 import { useMessengerStore, useWatchlistStore } from '../../store';
+import { resolvePosterUrl } from '../../utils/media';
 
 interface MovieCardProps {
   movie: Movie;
@@ -47,6 +48,8 @@ export const MovieCard: React.FC<MovieCardProps> = ({
     await addToWatchlist(String(movie.tmdbId || movie.id), 'medium');
   };
 
+  const posterUrl = resolvePosterUrl(movie.poster);
+
   return (
     <Card
       variant="hover"
@@ -58,7 +61,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
       {/* Poster Image as background to avoid <img> loading quirks */}
       <div
         className="absolute inset-0 bg-center bg-cover transition-transform duration-300 bg-gray-800"
-        style={{ backgroundImage: `url("${encodeURI(movie.poster)}")` }}
+        style={{ backgroundImage: `url("${encodeURI(posterUrl)}")` }}
         role="img"
         aria-label={movie.title}
       />
@@ -143,7 +146,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
             movie: {
               tmdbId: movie.tmdbId,
               title: movie.title,
-              poster: movie.poster,
+              poster: posterUrl,
             },
           });
         }}

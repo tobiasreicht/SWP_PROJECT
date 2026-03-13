@@ -4,6 +4,7 @@ import { Movie, Rating } from '../../types';
 import { Modal, Button, Badge } from '../ui';
 import { useMessengerStore, useRatingStore, useWatchlistStore } from '../../store';
 import { moviesAPI } from '../../services/api';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../../utils/media';
 
 interface MovieModalProps {
   movie: Movie | null;
@@ -40,6 +41,8 @@ export const MovieModal: React.FC<MovieModalProps> = ({
     : undefined;
 
   const isInWatchlist = Boolean(matchedWatchlistItem);
+  const posterUrl = resolvePosterUrl(movie?.poster || '');
+  const posterFallback = getPosterFallbackUrl();
 
   useEffect(() => {
     if (!isOpen) {
@@ -111,9 +114,12 @@ export const MovieModal: React.FC<MovieModalProps> = ({
           {/* Poster */}
           <div className="lg:w-72 xl:w-80 w-full flex-shrink-0 self-start">
             <img
-              src={movie.poster}
+              src={posterUrl}
               alt={movie.title}
               className="w-full rounded-xl object-cover max-h-[48vh] lg:max-h-[74vh] mx-auto shadow-lg border border-white/10"
+              onError={(event) => {
+                event.currentTarget.src = posterFallback;
+              }}
             />
           </div>
           {/* Content */}
@@ -257,7 +263,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
                     movie: {
                       tmdbId: movie.tmdbId,
                       title: movie.title,
-                      poster: movie.poster,
+                      poster: posterUrl,
                     },
                   });
                 }}

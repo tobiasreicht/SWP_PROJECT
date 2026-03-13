@@ -113,4 +113,22 @@ router.put('/:userId', authMiddleware, async (req: any, res) => {
   }
 });
 
+// Delete account (requires auth)
+router.delete('/:userId', authMiddleware, async (req: any, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (req.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // onDelete: Cascade in schema handles all related records
+    await prisma.user.delete({ where: { id: userId } });
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 export default router;
