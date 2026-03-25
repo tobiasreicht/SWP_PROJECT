@@ -11,12 +11,8 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, showFooter = true }) => {
   const { theme } = useSettingsStore();
-  const bgClass =
-    theme === 'light'
-      ? 'bg-gradient-to-b from-slate-200 via-slate-100 to-slate-50'
-      : 'bg-gradient-to-b from-neutral-900 via-neutral-900 to-neutral-950';
   return (
-    <div className={`min-h-screen ${bgClass} flex flex-col`}>
+    <div className={`min-h-screen flex flex-col ${theme === 'light' ? 'bg-slate-100' : 'bg-[#08080e]'}`}>
       <Header />
       <main className="flex-1">
         {children}

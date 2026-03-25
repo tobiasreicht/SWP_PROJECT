@@ -226,12 +226,25 @@ export const moviesAPI = {
     const providers = rawItem['watch/providers']?.results ?? {};
     const regionData = providers.DE ?? providers.AT ?? providers.US ?? {};
     const flatrate: any[] = regionData.flatrate ?? [];
+    const title = encodeURIComponent(rawItem.title ?? rawItem.name ?? '');
+
+    const PLATFORM_URLS: Record<StreamingPlatform['platform'], string> = {
+      'Netflix':     `https://www.netflix.com/search?q=${title}`,
+      'Prime Video': `https://www.primevideo.com/search/ref=atv_nb_sug_title?phrase=${title}`,
+      'Disney+':     `https://www.disneyplus.com/search/${title}`,
+      'Apple TV+':   `https://tv.apple.com/search?term=${title}`,
+      'HBO Max':     `https://www.max.com/search?q=${title}`,
+      'Hulu':        `https://www.hulu.com/search?q=${title}`,
+    };
+
     const streamingPlatforms: StreamingPlatform[] = flatrate
       .filter((p: any) => PROVIDER_MAP[p.provider_id])
-      .map((p: any) => ({
-        platform: PROVIDER_MAP[p.provider_id],
-        url: `https://www.justwatch.com/de/Suche?q=${encodeURIComponent(rawItem.title ?? rawItem.name ?? '')}`,
-      }));
+      .map((p: any) => {
+        const platform = PROVIDER_MAP[p.provider_id];
+        return { platform, url: PLATFORM_URLS[platform] };
+      })
+      // Deduplicate by platform name (e.g. two Prime Video provider IDs)
+      .filter((p, i, arr) => arr.findIndex(x => x.platform === p.platform) === i);
 
     rawItem._director = director;
     rawItem._cast = cast;

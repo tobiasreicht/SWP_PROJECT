@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Mail, Lock, User } from 'lucide-react';
-import { Card, Button, Input } from '../components/ui';
+import { Mail, Lock, User, Film } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store';
 
@@ -10,142 +9,138 @@ export const Auth: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
+  useEffect(() => { if (user) navigate('/'); }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    setError('');
     try {
       if (isLogin) {
         await login(email, password);
-        navigate('/');
       } else {
-        await register(
-          email,
-          email.split('@')[0],
-          displayName || email.split('@')[0],
-          password
-        );
-        navigate('/');
+        await register(email, email.split('@')[0], displayName || email.split('@')[0], password);
       }
-    } catch (error: any) {
-      console.error('Auth error:', error?.response?.data || error);
-      alert(error?.response?.data?.error || 'Authentication failed');
+      navigate('/');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Authentication failed. Please try again.');
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <Card className="w-full max-w-md p-8">
-        {/* Header */}
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-sm">
+
+        {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">🎬 FilmTracker</h1>
-          <p className="text-gray-400">
-            {isLogin ? 'Welcome back!' : 'Join the community'}
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/30 mb-4">
+            <Film size={22} className="text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            {isLogin ? 'Welcome back' : 'Create an account'}
+          </h1>
+          <p className="text-gray-400 text-sm mt-1">
+            {isLogin ? 'Sign in to WatchTogether' : 'Join the community'}
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Display Name (Sign Up) */}
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Display Name
-              </label>
-              <Input
-                placeholder="John Doe"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
+        {/* Card */}
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] backdrop-blur-sm p-6 space-y-4">
+
+          {error && (
+            <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {error}
             </div>
           )}
 
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Email
-            </label>
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+          <form onSubmit={handleSubmit} className="space-y-3">
+            {!isLogin && (
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Display Name</label>
+                <div className="relative">
+                  <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="John Doe"
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    className="field pl-9"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  className="field pl-9"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-gray-400">Password</label>
+                {isLogin && (
+                  <a href="#" className="text-xs text-red-500 hover:text-red-400 transition-colors">
+                    Forgot password?
+                  </a>
+                )}
+              </div>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  className="field pl-9"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed mt-1 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Loading…</>
+              ) : isLogin ? 'Sign In' : 'Create Account'}
+            </button>
+          </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/[0.07]" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-3 bg-[#0f0f15] text-gray-500 text-xs">or</span>
+            </div>
           </div>
 
-          {/* Password */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Password
-            </label>
-            <Input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          {/* Forgot Password (Login) */}
-          {isLogin && (
-            <a href="#" className="text-sm text-red-600 hover:text-red-500">
-              Forgot password?
-            </a>
-          )}
-
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full"
-            isLoading={isLoading}
-          >
-            {isLogin ? 'Sign In' : 'Create Account'}
-          </Button>
-        </form>
-
-        {/* Divider */}
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-gray-900 text-gray-400">Or continue with</span>
-          </div>
+          <p className="text-center text-gray-400 text-sm">
+            {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
+            <button
+              type="button"
+              onClick={() => { setIsLogin(!isLogin); setError(''); }}
+              className="text-red-500 hover:text-red-400 font-semibold transition-colors"
+            >
+              {isLogin ? 'Sign up' : 'Sign in'}
+            </button>
+          </p>
         </div>
-
-        {/* Social Login */}
-        <div className="grid grid-cols-2 gap-4">
-          <Button variant="secondary" className="w-full">
-            Google
-          </Button>
-          <Button variant="secondary" className="w-full">
-            GitHub
-          </Button>
-        </div>
-
-        {/* Toggle Sign In/Up */}
-        <p className="text-center text-gray-400 text-sm mt-6">
-          {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-red-600 hover:text-red-500 font-medium"
-          >
-            {isLogin ? 'Sign up' : 'Sign in'}
-          </button>
-        </p>
-
-      </Card>
+      </div>
     </div>
   );
 };

@@ -259,25 +259,32 @@ export const Profile: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">Loading profile...</p>
+      <div className="page-container">
+        <div className="page-inner max-w-4xl">
+          <div className="h-8 w-32 rounded-xl bg-white/[0.05] animate-pulse mb-8" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 rounded-2xl bg-white/[0.04] animate-pulse" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Page Header */}
-      <div className="max-w-4xl mx-auto px-4 md:px-6 py-8">
+    <div className="page-container">
+      <div className="page-inner max-w-4xl">
         {/* Profile Header */}
         <div className="mb-8">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex gap-6">
-              <div className="flex flex-col items-center gap-3">
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-6">Profile</h1>
+          <div className="flex items-start justify-between">
+            <div className="flex gap-5">
+              <div className="flex flex-col items-center gap-2">
                 <img
-                  src={profile.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.displayName || profile.email || 'User') + '&background=1f2937&color=ffffff'}
+                  src={profile.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.displayName || profile.email || 'User') + '&background=dc2626&color=ffffff'}
                   alt={profile.displayName}
-                  className="w-24 h-24 rounded-xl object-cover ring-2 ring-white/10"
+                  className="w-20 h-20 rounded-2xl object-cover ring-1 ring-white/[0.1]"
                 />
                 {isEditing && (
                   <>
@@ -352,24 +359,24 @@ export const Profile: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
           {stats.map((stat) => (
-            <Card key={stat.label} className="p-6 text-center">
-              <p className="text-gray-400 text-sm mb-2">{stat.label}</p>
-              <p className="text-2xl font-bold text-white">{stat.value}</p>
-            </Card>
+            <div key={stat.label} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 text-center">
+              <p className="text-gray-400 text-xs mb-1">{stat.label}</p>
+              <p className="text-xl font-bold text-white">{stat.value}</p>
+            </div>
           ))}
         </div>
 
         {/* Settings */}
-        <Card className="p-6">
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-            <Settings size={24} />
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5">
+          <h2 className="text-lg font-semibold text-white mb-5 flex items-center gap-2">
+            <Settings size={17} className="text-gray-400" />
             Settings
           </h2>
 
           {/* Tab Navigation */}
-          <div className="flex flex-wrap gap-1 mb-8 bg-white/5 rounded-xl p-1">
+          <div className="flex flex-wrap gap-1 mb-6 bg-white/[0.03] rounded-xl p-1 border border-white/[0.05]">
             {(
               [
                 { id: 'appearance', label: 'Appearance', icon: Sun },
@@ -770,12 +777,12 @@ export const Profile: React.FC = () => {
 
           {/* Saved feedback toast */}
           {savedFeedback && (
-            <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-green-500/90 text-white text-sm font-medium shadow-lg">
+            <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/90 text-white text-sm font-medium shadow-2xl">
               <Check size={16} />
-              Settings saved
+              Saved
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Delete Account Modal */}
         <Modal
