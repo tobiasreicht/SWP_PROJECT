@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { MovieCard, MovieModal } from '../components/movie';
 import { Movie } from '../types';
-import { moviesAPI } from '../services/api';
+import { moviesAPI } from '../services/tmdb';
 import { useWatchlistStore } from '../store';
 
-const INITIAL_VISIBLE_MOVIES = 12;
-const LOAD_MORE_STEP = 100;
+const INITIAL_VISIBLE_MOVIES = 20;
+const LOAD_MORE_STEP = 20;
 
 export const Explore: React.FC = () => {
   const { fetchWatchlist, fetchWatchlistCount } = useWatchlistStore();
@@ -25,13 +25,17 @@ export const Explore: React.FC = () => {
 
   const genres = [
     'Action',
+    'Comedy',
     'Crime',
     'Drama',
+    'Fantasy',
+    'Horror',
+    'Romance',
     'Sci-Fi',
     'Thriller',
-    'Biography',
     'History',
-    'Romance',
+    'Animation',
+    'Documentary',
   ];
 
   const visibleMovies = useMemo(
@@ -122,8 +126,14 @@ export const Explore: React.FC = () => {
 
         {/* Movie Grid */}
         {isLoading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Loading movies...</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-3 gap-x-8 pb-28">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-80 w-full rounded-lg bg-neutral-800 animate-pulse"
+                style={{ animationDelay: `${i * 40}ms` }}
+              />
+            ))}
           </div>
         ) : movies.length > 0 ? (
           <>

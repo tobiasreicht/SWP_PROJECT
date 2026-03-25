@@ -46,7 +46,7 @@ export const Header: React.FC = () => {
 
     const intervalId = window.setInterval(() => {
       loadInbox();
-    }, 10000);
+    }, 30000);
 
     return () => {
       window.clearInterval(intervalId);

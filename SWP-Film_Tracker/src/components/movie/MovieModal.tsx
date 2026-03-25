@@ -3,7 +3,7 @@ import { X, Star, Plus, Check, Share2, Heart, ExternalLink } from 'lucide-react'
 import { Movie, Rating } from '../../types';
 import { Modal, Button, Badge } from '../ui';
 import { useMessengerStore, useRatingStore, useWatchlistStore } from '../../store';
-import { moviesAPI } from '../../services/api';
+import { moviesAPI } from '../../services/tmdb';
 import { getPosterFallbackUrl, resolvePosterUrl } from '../../utils/media';
 
 interface MovieModalProps {

@@ -58,12 +58,13 @@ export const MovieCard: React.FC<MovieCardProps> = ({
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => onSelect(movie)}
     >
-      {/* Poster Image as background to avoid <img> loading quirks */}
-      <div
-        className="absolute inset-0 bg-center bg-cover transition-transform duration-300 bg-gray-800"
-        style={{ backgroundImage: `url("${encodeURI(posterUrl)}")` }}
-        role="img"
-        aria-label={movie.title}
+      {/* Poster Image */}
+      <img
+        src={encodeURI(posterUrl)}
+        alt={movie.title}
+        loading="lazy"
+        decoding="async"
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 bg-gray-800"
       />
 
       {/* Overlay */}

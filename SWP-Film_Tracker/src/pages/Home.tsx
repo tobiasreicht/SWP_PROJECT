@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Play } from 'lucide-react';
 import { MovieRow, MovieModal } from '../components/movie';
 import { Movie } from '../types';
-import { moviesAPI } from '../services/api';
+import { moviesAPI } from '../services/tmdb';
 import { useWatchlistStore } from '../store';
 
 interface HomeRow {
@@ -17,24 +17,22 @@ interface HomeCachePayload {
 }
 
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_PREFIX = 'home-cache-v1';
+const HOME_CACHE_PREFIX = 'home-cache-v3';
 
 const shuffleArray = <T,>(items: T[]): T[] => {
   const copy = [...items];
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [copy[index], copy[randomIndex]] = [copy[randomIndex], copy[index]];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
 };
 
 const uniqueMovies = (movies: Movie[]): Movie[] => {
   const seen = new Set<string>();
-  return movies.filter((movie) => {
-    const key = `${movie.id}-${movie.tmdbId || ''}`;
-    if (seen.has(key)) {
-      return false;
-    }
+  return movies.filter((m) => {
+    const key = `${m.id}-${m.tmdbId || ''}`;
+    if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
@@ -45,14 +43,10 @@ const normalizeMovieResponse = (responseData: any): Movie[] =>
 
 const getHomeCacheKey = () => {
   try {
-    const rawUser = localStorage.getItem('user');
-    if (!rawUser) {
-      return `${HOME_CACHE_PREFIX}:guest`;
-    }
-
-    const parsedUser = JSON.parse(rawUser);
-    const userId = parsedUser?.id || 'guest';
-    return `${HOME_CACHE_PREFIX}:${userId}`;
+    const raw = localStorage.getItem('user');
+    if (!raw) return `${HOME_CACHE_PREFIX}:guest`;
+    const user = JSON.parse(raw);
+    return `${HOME_CACHE_PREFIX}:${user?.id || 'guest'}`;
   } catch {
     return `${HOME_CACHE_PREFIX}:guest`;
   }
@@ -60,20 +54,11 @@ const getHomeCacheKey = () => {
 
 const readHomeCache = (cacheKey: string): HomeCachePayload | null => {
   try {
-    const rawCache = localStorage.getItem(cacheKey);
-    if (!rawCache) {
-      return null;
-    }
-
-    const parsedCache = JSON.parse(rawCache) as HomeCachePayload;
-    if (
-      typeof parsedCache?.cachedAt !== 'number' ||
-      !Array.isArray(parsedCache?.homeRows)
-    ) {
-      return null;
-    }
-
-    return parsedCache;
+    const raw = localStorage.getItem(cacheKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as HomeCachePayload;
+    if (typeof parsed?.cachedAt !== 'number' || !Array.isArray(parsed?.homeRows)) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -81,16 +66,28 @@ const readHomeCache = (cacheKey: string): HomeCachePayload | null => {
 
 const writeHomeCache = (cacheKey: string, payload: Omit<HomeCachePayload, 'cachedAt'>) => {
   try {
-    const cacheValue: HomeCachePayload = {
-      cachedAt: Date.now(),
-      ...payload,
-    };
-
-    localStorage.setItem(cacheKey, JSON.stringify(cacheValue));
-  } catch {
-    // ignore storage failures
-  }
+    localStorage.setItem(cacheKey, JSON.stringify({ cachedAt: Date.now(), ...payload }));
+  } catch {}
 };
+
+const MovieRowSkeleton: React.FC<{ title?: string }> = ({ title }) => (
+  <div className="relative mb-8">
+    {title && (
+      <h2 className="text-2xl md:text-3xl font-bold text-neutral-600 mb-6 px-4 md:px-6 animate-pulse">
+        {title}
+      </h2>
+    )}
+    <div className="flex gap-4 px-4 md:px-6 overflow-hidden">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-80 w-60 flex-shrink-0 rounded-lg bg-neutral-800 animate-pulse"
+          style={{ animationDelay: `${i * 80}ms` }}
+        />
+      ))}
+    </div>
+  </div>
+);
 
 export const Home: React.FC = () => {
   const { fetchWatchlist, fetchWatchlistCount } = useWatchlistStore();
@@ -99,106 +96,113 @@ export const Home: React.FC = () => {
   const [heroMovie, setHeroMovie] = useState<Movie | null>(null);
   const [homeRows, setHomeRows] = useState<HomeRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const cacheKey = getHomeCacheKey();
 
-    const buildHomeData = async (): Promise<Omit<HomeCachePayload, 'cachedAt'>> => {
-      const pagesToLoad = 8;
-      const pageRequests = Array.from({ length: pagesToLoad }, (_, index) =>
-        moviesAPI.getAll(index + 1, 20)
-      );
-
-      const genrePool = ['Action', 'Drama', 'Comedy', 'Thriller', 'Sci-Fi', 'Crime', 'Romance', 'Adventure', 'Animation', 'Fantasy'];
-      const shuffledGenres = shuffleArray(genrePool).slice(0, 4);
-      const genreRequests = shuffledGenres.map((genre) => moviesAPI.getByGenre(genre));
-
-      const [pagedResponses, trendingRes, newRes, ...genreResponses] = await Promise.all([
-        Promise.all(pageRequests),
+    const fetchCritical = async () => {
+      // Phase 1: Only 3 requests — show page fast
+      const [trendingRes, newRes, page1Res] = await Promise.all([
         moviesAPI.getTrending(),
         moviesAPI.getNewReleases(),
-        ...genreRequests,
+        moviesAPI.getAll(1, 20),
       ]);
 
-      const pagedMovies = pagedResponses.flatMap((response) => normalizeMovieResponse(response.data));
-      const trendingMovies = normalizeMovieResponse(trendingRes.data);
-      const newReleaseMovies = normalizeMovieResponse(newRes.data);
-      const genreMoviesByRow = genreResponses.map((response) => normalizeMovieResponse(response.data));
+      const trending = normalizeMovieResponse(trendingRes.data);
+      const newReleases = normalizeMovieResponse(newRes.data);
+      const page1 = normalizeMovieResponse(page1Res.data);
 
-      const bigPool = uniqueMovies([
-        ...pagedMovies,
-        ...trendingMovies,
-        ...newReleaseMovies,
-        ...genreMoviesByRow.flat(),
-      ]);
-
-      const mixedPool = shuffleArray(bigPool);
-      const mixedTrending = shuffleArray(trendingMovies);
-      const mixedNewReleases = shuffleArray(newReleaseMovies);
-
-      const heroCandidates = shuffleArray(
-        uniqueMovies([...mixedTrending, ...mixedNewReleases, ...mixedPool]).filter(
-          (movie) => Boolean(movie.backdrop || movie.poster)
-        )
+      const heroPool = shuffleArray(
+        uniqueMovies([...trending, ...newReleases]).filter(m => Boolean(m.backdrop || m.poster))
       );
 
-      const curatedRows: HomeRow[] = [
-        { title: 'Trending Now', movies: mixedTrending },
-        { title: 'New Releases', movies: mixedNewReleases },
-        { title: 'Because You Might Like', movies: mixedPool.slice(0, 25) },
-        { title: 'Top Picks Tonight', movies: mixedPool.slice(25, 50) },
-        { title: 'Hidden Gems', movies: mixedPool.slice(50, 75) },
-        { title: 'More to Explore', movies: mixedPool.slice(75, 110) },
-      ];
+      const rows: HomeRow[] = [
+        { title: 'Trending Now', movies: shuffleArray(trending) },
+        { title: 'New Releases', movies: shuffleArray(newReleases) },
+        { title: 'Popular Movies', movies: uniqueMovies(page1) },
+      ].filter(row => row.movies.length > 0);
 
-      const genreRows: HomeRow[] = genreMoviesByRow
-        .map((movies, index) => ({
-          title: `${shuffledGenres[index]} Spotlight`,
-          movies: uniqueMovies(shuffleArray(movies)).slice(0, 20),
-        }))
-        .filter((row) => row.movies.length > 0);
-
-      const mergedRows = [...curatedRows, ...genreRows].filter((row) => row.movies.length > 0);
-
-      return {
-        heroMovie: heroCandidates[0] || null,
-        homeRows: mergedRows,
-      };
+      return { heroMovie: heroPool[0] || null, homeRows: rows, trending, newReleases, page1 };
     };
 
-    const fetchMovies = async (showSpinner: boolean) => {
-      try {
-        if (showSpinner) {
-          setIsLoading(true);
-        }
+    const fetchExtra = async (existing: Movie[]) => {
+      // Phase 2: background — 2 pages + 3 genre rows
+      const existingIds = new Set(existing.map(m => `${m.id}-${m.tmdbId || ''}`));
+      const genrePool = ['Action', 'Drama', 'Comedy', 'Thriller', 'Sci-Fi', 'Crime', 'Romance', 'Adventure'];
+      const genres = shuffleArray(genrePool).slice(0, 3);
 
-        const payload = await buildHomeData();
-        setHeroMovie(payload.heroMovie);
-        setHomeRows(payload.homeRows);
-        writeHomeCache(cacheKey, payload);
-      } catch (error) {
-        console.error('Error fetching movies:', error);
-      } finally {
+      const [page2Res, page3Res, ...genreResponses] = await Promise.all([
+        moviesAPI.getAll(2, 20),
+        moviesAPI.getAll(3, 20),
+        ...genres.map(g => moviesAPI.getByGenre(g)),
+      ]);
+
+      const extraPool = shuffleArray(
+        uniqueMovies([
+          ...normalizeMovieResponse(page2Res.data),
+          ...normalizeMovieResponse(page3Res.data),
+        ]).filter(m => !existingIds.has(`${m.id}-${m.tmdbId || ''}`))
+      );
+
+      return [
+        { title: 'Because You Might Like', movies: extraPool.slice(0, 20) },
+        { title: 'Top Picks Tonight', movies: extraPool.slice(20, 40) },
+        ...genres.map((g, i) => ({
+          title: `${g} Spotlight`,
+          movies: uniqueMovies(shuffleArray(normalizeMovieResponse(genreResponses[i].data))).slice(0, 20),
+        })),
+      ].filter(row => row.movies.length > 0);
+    };
+
+    const run = async () => {
+      const cachedData = readHomeCache(cacheKey);
+      const cacheAge = cachedData ? Date.now() - cachedData.cachedAt : Infinity;
+      const hasFreshCache = cachedData && cacheAge < HOME_CACHE_TTL_MS;
+
+      if (cachedData) {
+        setHeroMovie(cachedData.heroMovie);
+        setHomeRows(cachedData.homeRows);
         setIsLoading(false);
+      }
+
+      if (!hasFreshCache) {
+        try {
+          if (!cachedData) setIsLoading(true);
+
+          const critical = await fetchCritical();
+          if (cancelled) return;
+
+          setHeroMovie(critical.heroMovie);
+          setHomeRows(critical.homeRows);
+          setIsLoading(false);
+          setIsLoadingMore(true);
+
+          const extraRows = await fetchExtra([...critical.trending, ...critical.newReleases, ...critical.page1]);
+          if (cancelled) return;
+
+          setHomeRows(prev => {
+            const merged = [...prev, ...extraRows];
+            writeHomeCache(cacheKey, { heroMovie: critical.heroMovie, homeRows: merged });
+            return merged;
+          });
+        } catch (err) {
+          console.error('Error fetching movies:', err);
+        } finally {
+          if (!cancelled) {
+            setIsLoading(false);
+            setIsLoadingMore(false);
+          }
+        }
       }
     };
 
-    const cachedData = readHomeCache(cacheKey);
-    const cacheAgeMs = cachedData ? Date.now() - cachedData.cachedAt : Number.POSITIVE_INFINITY;
-    const hasFreshCache = Boolean(cachedData && cacheAgeMs < HOME_CACHE_TTL_MS);
-
-    if (cachedData) {
-      setHeroMovie(cachedData.heroMovie);
-      setHomeRows(cachedData.homeRows);
-      setIsLoading(false);
-    }
-
-    if (!hasFreshCache) {
-      fetchMovies(!cachedData);
-    }
-
+    run();
     fetchWatchlist();
     fetchWatchlistCount();
+
+    return () => { cancelled = true; };
   }, []);
 
   const handleMovieSelect = (movie: Movie) => {
@@ -216,7 +220,7 @@ export const Home: React.FC = () => {
               title={`${heroMovie.title} trailer`}
               src={heroMovie.trailerUrl}
               className="absolute left-1/2 top-1/2 h-[122%] w-[122%] max-w-none -translate-x-1/2 -translate-y-[60%] pointer-events-none"
-              allow="autoplay; encrypted-media; picture-in-picture "
+              allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
             />
             <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 via-neutral-900/60 to-transparent" />
@@ -224,9 +228,7 @@ export const Home: React.FC = () => {
         ) : heroMovie?.backdrop ? (
           <div
             className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: `url('${heroMovie.backdrop}')`,
-            }}
+            style={{ backgroundImage: `url('${heroMovie.backdrop}')` }}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 via-neutral-900/60 to-transparent" />
           </div>
@@ -236,14 +238,13 @@ export const Home: React.FC = () => {
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-150 bg-gradient-to-b from-transparent via-neutral-900/55 to-neutral-900 backdrop-blur-sm" />
 
-        {/* Content */}
         <div className="relative h-full flex flex-col justify-center px-4 md:px-12 max-w-7xl mx-auto">
           <div className="max-w-2xl">
             <h1 className="text-5xl md:text-7xl font-bold text-white mb-4">
-              {heroMovie?.title || 'No trending title available'}
+              {heroMovie?.title || 'Welcome'}
             </h1>
             <p className="text-xl text-gray-300 mb-8">
-              {heroMovie?.description || 'Trending content will appear here once available from the backend.'}
+              {heroMovie?.description || "Discover movies and series you'll love."}
             </p>
             {heroMovie && (
               <div className="flex gap-4">
@@ -269,9 +270,11 @@ export const Home: React.FC = () => {
       {/* Content Rows */}
       <div className="relative z-20 -mt-60 w-full pb-16">
         {isLoading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Loading movies...</p>
-          </div>
+          <>
+            <MovieRowSkeleton title="Trending Now" />
+            <MovieRowSkeleton title="New Releases" />
+            <MovieRowSkeleton title="Popular Movies" />
+          </>
         ) : (
           <>
             {homeRows.map((row) => (
@@ -282,11 +285,16 @@ export const Home: React.FC = () => {
                 onMovieSelect={handleMovieSelect}
               />
             ))}
+            {isLoadingMore && (
+              <>
+                <MovieRowSkeleton title="Loading more..." />
+                <MovieRowSkeleton />
+              </>
+            )}
           </>
         )}
       </div>
 
-      {/* Movie Modal */}
       <MovieModal
         movie={selectedMovie}
         isOpen={isModalOpen}

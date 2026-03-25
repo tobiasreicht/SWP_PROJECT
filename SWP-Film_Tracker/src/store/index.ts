@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User, Movie, Rating, WatchlistItem, WatchlistSummary, MessageAttachmentMovie } from '../types';
-import { authAPI, moviesAPI, ratingsAPI, watchlistAPI } from '../services/api';
+import { authAPI, ratingsAPI, watchlistAPI } from '../services/api';
+import { moviesAPI } from '../services/tmdb';
 
 interface AuthState {
   user: User | null;

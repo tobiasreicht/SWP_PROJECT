@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"import.*from\" /c/Users/lucah/Desktop/HTL/SWP/SWP_PROJECT/SWP-Film_Tracker/src/pages/*.tsx)"
+    ]
+  }
+}
