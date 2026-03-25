@@ -40,7 +40,7 @@ export const Explore: React.FC = () => {
     setSearchQuery(inputValue.trim());
     try {
       const res = await moviesAPI.search(inputValue.trim());
-      setMovies(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      setMovies(res.data);
     } catch { /* silent */ } finally { setIsLoading(false); }
   };
 
@@ -51,7 +51,7 @@ export const Explore: React.FC = () => {
     setIsLoading(true);
     try {
       const res = await moviesAPI.getByGenre(genre);
-      setMovies(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      setMovies(res.data);
     } catch { /* silent */ } finally { setIsLoading(false); }
   };
 

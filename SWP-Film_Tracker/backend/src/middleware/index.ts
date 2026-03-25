@@ -35,10 +35,15 @@ export const readTokenMiddleware = (req: Request, res: Response, next: NextFunct
     const headerToken = req.headers['x-api-token'] as string | undefined;
     const bearer = req.headers.authorization?.split(' ')[1];
     const token = headerToken || bearer || (req.query && (req.query as any).api_token);
+    const isDevelopment = process.env.NODE_ENV !== 'production';
 
     const expected = process.env.MOVIE_READ_TOKEN;
     if (!expected) {
       // If no token configured, allow access (development convenience)
+      return next();
+    }
+
+    if (isDevelopment && req.method === 'GET' && !token) {
       return next();
     }
 
@@ -61,8 +66,6 @@ export const readTokenMiddleware = (req: Request, res: Response, next: NextFunct
     }
 
     return res.status(401).json({ error: 'Invalid or missing API read token' });
-
-    next();
   } catch (err) {
     res.status(401).json({ error: 'Invalid API token' });
   }

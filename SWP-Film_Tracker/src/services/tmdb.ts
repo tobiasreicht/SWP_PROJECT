@@ -4,11 +4,14 @@
  * replacement for the moviesAPI from api.ts.
  */
 
+import { moviesAPI as backendMoviesAPI } from './api';
 import type { Movie, StreamingPlatform } from '../types';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const TOKEN = import.meta.env.VITE_TMDB_READ_TOKEN as string;
+
+const shouldUseDirectTMDB = () => Boolean(TOKEN?.trim());
 
 // ── TMDB genre IDs → readable names ──────────────────────────────────────────
 const GENRE_ID_MAP: Record<number, string> = {
@@ -124,6 +127,11 @@ function qualityFilter(items: any[]): any[] {
 export const moviesAPI = {
   /** Paginated popular movies — replaces getAll */
   getAll: async (page = 1, _limit = 20): Promise<{ data: Movie[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getAll(page, _limit);
+      return { data: response.data };
+    }
+
     const [movieRes, tvRes] = await Promise.all([
       tmdbFetch<any>('/movie/popular', { page }),
       tmdbFetch<any>('/tv/popular', { page }),
@@ -142,6 +150,11 @@ export const moviesAPI = {
 
   /** Trending this week (movies + TV) */
   getTrending: async (): Promise<{ data: Movie[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getTrending();
+      return { data: response.data };
+    }
+
     const [movieRes, tvRes] = await Promise.all([
       tmdbFetch<any>('/trending/movie/week'),
       tmdbFetch<any>('/trending/tv/week'),
@@ -159,6 +172,11 @@ export const moviesAPI = {
 
   /** Now playing in cinemas + currently airing TV */
   getNewReleases: async (): Promise<{ data: Movie[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getNewReleases();
+      return { data: response.data };
+    }
+
     const [movieRes, tvRes] = await Promise.all([
       tmdbFetch<any>('/movie/now_playing'),
       tmdbFetch<any>('/tv/on_the_air'),
@@ -170,6 +188,11 @@ export const moviesAPI = {
 
   /** Discover by genre name */
   getByGenre: async (genre: string): Promise<{ data: Movie[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getByGenre(genre);
+      return { data: response.data };
+    }
+
     const genreId = GENRE_NAME_MAP[genre];
     if (!genreId) return { data: [] };
     const [movieRes, tvRes] = await Promise.all([
@@ -183,6 +206,11 @@ export const moviesAPI = {
 
   /** Full-text search (movies + TV) */
   search: async (query: string): Promise<{ data: Movie[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.search(query);
+      return { data: response.data };
+    }
+
     const res = await tmdbFetch<any>('/search/multi', { query, include_adult: 'false' });
     const results = (res.results ?? [])
       .filter((i: any) => (i.media_type === 'movie' || i.media_type === 'tv') && i.poster_path)
@@ -192,6 +220,11 @@ export const moviesAPI = {
 
   /** Single movie/TV details with cast, trailer, and streaming providers */
   getById: async (id: string): Promise<{ data: Movie }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getById(id);
+      return { data: response.data };
+    }
+
     // Try movie first, fall back to TV
     let rawItem: any;
     let mediaType: 'movie' | 'tv' = 'movie';

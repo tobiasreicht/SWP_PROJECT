@@ -117,8 +117,7 @@ export const useMovieStore = create<MovieState>((set) => ({
     set({ isLoading: true });
     try {
       const response = await moviesAPI.getAll();
-      const movies = Array.isArray(response.data) ? response.data : response.data?.data || [];
-      set({ movies, isLoading: false });
+      set({ movies: response.data, isLoading: false });
     } catch (error) {
       console.error('Error fetching movies:', error);
       set({ isLoading: false });
@@ -129,8 +128,7 @@ export const useMovieStore = create<MovieState>((set) => ({
     set({ isLoading: true });
     try {
       const response = await moviesAPI.getByGenre(genre);
-      const movies = Array.isArray(response.data) ? response.data : response.data?.data || [];
-      set({ movies, isLoading: false });
+      set({ movies: response.data, isLoading: false });
     } catch (error) {
       console.error('Error fetching movies:', error);
       set({ isLoading: false });
@@ -141,8 +139,7 @@ export const useMovieStore = create<MovieState>((set) => ({
     set({ isLoading: true });
     try {
       const response = await moviesAPI.search(query);
-      const movies = Array.isArray(response.data) ? response.data : response.data?.data || [];
-      set({ movies, isLoading: false });
+      set({ movies: response.data, isLoading: false });
     } catch (error) {
       console.error('Error fetching movies:', error);
       set({ isLoading: false });
