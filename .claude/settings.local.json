@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -r \"import.*from\" /c/Users/lucah/Desktop/HTL/SWP/SWP_PROJECT/SWP-Film_Tracker/src/pages/*.tsx)"
+      "Bash(grep -r \"import.*from\" /c/Users/lucah/Desktop/HTL/SWP/SWP_PROJECT/SWP-Film_Tracker/src/pages/*.tsx)",
+      "Bash(find /c/Users/lucah/Desktop/HTL/4Klasse/SWP/SWP_PROJECT/SWP-Film_Tracker -type d ! -path */node_modules/*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)"
     ]
   }
 }
