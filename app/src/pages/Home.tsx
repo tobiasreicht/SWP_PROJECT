@@ -17,7 +17,8 @@ interface HomeCachePayload {
 }
 
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_PREFIX = 'home-cache-v4';
+const HOME_CACHE_PREFIX = 'home-cache-v5';
+const RECENT_RELEASE_WINDOW_DAYS = 60;
 
 const shuffleArray = <T,>(items: T[]): T[] => {
   const copy = [...items];
@@ -36,6 +37,45 @@ const uniqueMovies = (movies: Movie[]): Movie[] => {
     seen.add(key);
     return true;
   });
+};
+
+const parseMovieDate = (value: Date | string | null | undefined): Date | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const splitReleaseBuckets = (movies: Movie[]) => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const recentCutoff = new Date(now);
+  recentCutoff.setDate(recentCutoff.getDate() - RECENT_RELEASE_WINDOW_DAYS);
+
+  const released = movies
+    .filter((movie) => {
+      const releaseDate = parseMovieDate(movie.releaseDate);
+      if (!releaseDate) return false;
+      return releaseDate <= now && releaseDate >= recentCutoff;
+    })
+    .sort((a, b) => {
+      const aTime = parseMovieDate(a.releaseDate)?.getTime() ?? 0;
+      const bTime = parseMovieDate(b.releaseDate)?.getTime() ?? 0;
+      return bTime - aTime;
+    });
+
+  const upcomingThisYear = movies
+    .filter((movie) => {
+      const releaseDate = parseMovieDate(movie.releaseDate);
+      if (!releaseDate) return false;
+      return releaseDate > now && releaseDate.getFullYear() === currentYear;
+    })
+    .sort((a, b) => {
+      const aTime = parseMovieDate(a.releaseDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const bTime = parseMovieDate(b.releaseDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    });
+
+  return { released, upcomingThisYear };
 };
 
 const withVerifiedTrailer = async (candidates: Movie[], maxChecks = 12): Promise<Movie | null> => {
@@ -121,16 +161,21 @@ export const Home: React.FC = () => {
     const cacheKey = getHomeCacheKey();
 
     const fetchCritical = async () => {
-      // Phase 1: Only 3 requests — show page fast
-      const [trendingRes, newRes, page1Res] = await Promise.all([
+      // Phase 1: Get enough data to build meaningful release buckets
+      const [trendingRes, newRes, page1Res, page2Res] = await Promise.all([
         moviesAPI.getTrending(),
         moviesAPI.getNewReleases(),
         moviesAPI.getAll(1, 20),
+        moviesAPI.getAll(2, 20),
       ]);
 
       const trending = normalizeMovieResponse(trendingRes.data);
-      const newReleases = normalizeMovieResponse(newRes.data);
+      const allReleaseCandidates = normalizeMovieResponse(newRes.data);
+      const { released: newReleases, upcomingThisYear } = splitReleaseBuckets(allReleaseCandidates);
       const page1 = normalizeMovieResponse(page1Res.data);
+      const page2 = normalizeMovieResponse(page2Res.data);
+      const releaseCandidatePool = uniqueMovies([...allReleaseCandidates, ...page1, ...page2, ...trending]);
+      const { released: robustNewReleases, upcomingThisYear: robustUpcomingThisYear } = splitReleaseBuckets(releaseCandidatePool);
 
       const heroPool = shuffleArray(
         uniqueMovies([...trending, ...newReleases, ...page1]).filter(m => Boolean(m.backdrop || m.poster))
@@ -139,9 +184,10 @@ export const Home: React.FC = () => {
 
       const rows: HomeRow[] = [
         { title: 'Trending Now', movies: shuffleArray(trending) },
-        { title: 'New Releases', movies: shuffleArray(newReleases) },
+        { title: 'New Releases (Last 60 Days)', movies: shuffleArray(robustNewReleases) },
+        { title: 'Upcoming This Year', movies: robustUpcomingThisYear },
         { title: 'Popular Movies', movies: uniqueMovies(page1) },
-      ].filter(row => row.movies.length > 0);
+      ];
 
       return { heroMovie, homeRows: rows, trending, newReleases, page1 };
     };

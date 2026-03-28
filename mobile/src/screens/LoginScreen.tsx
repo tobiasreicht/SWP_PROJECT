@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
 import { useAuthStore } from '../store';
 
 export function LoginScreen({ navigation }: any) {
@@ -22,6 +22,11 @@ export function LoginScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
+      <Image
+        source={require('@/assets/images/watch-togther-logo.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
       <Text style={styles.title}>Film Tracker</Text>
       
       <TextInput
@@ -73,11 +78,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: 'bold',
     color: '#dc2626',
-    marginBottom: 40,
+    marginBottom: 30,
     textAlign: 'center',
+  },
+  logo: {
+    width: 220,
+    height: 116,
+    alignSelf: 'center',
+    marginBottom: 10,
   },
   input: {
     backgroundColor: '#2a2a2a',

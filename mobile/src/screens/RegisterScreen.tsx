@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert, ScrollView, Image } from 'react-native';
 import { useAuthStore } from '../store';
 
 export function RegisterScreen({ navigation }: any) {
@@ -31,6 +31,11 @@ export function RegisterScreen({ navigation }: any) {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.inner}>
+        <Image
+          source={require('@/assets/images/watch-togther-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>Create Account</Text>
         
         <TextInput
@@ -110,7 +115,13 @@ const styles = StyleSheet.create({
   },
   inner: {
     padding: 20,
-    paddingTop: 40,
+    paddingTop: 24,
+  },
+  logo: {
+    width: 220,
+    height: 116,
+    alignSelf: 'center',
+    marginBottom: 8,
   },
   title: {
     fontSize: 28,

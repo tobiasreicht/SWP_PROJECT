@@ -55,57 +55,59 @@ export function ExploreScreen({ navigation }: any) {
           </Text>
         </View>
       ) : (
-        <View style={styles.resultsWrap}>
-          {actorResults.length > 0 && (
-            <View style={styles.actorSection}>
-              <Text style={styles.sectionTitle}>Actors</Text>
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={actorResults}
-                keyExtractor={(item) => String(item.id)}
-                contentContainerStyle={styles.actorList}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.actorCard}
-                    onPress={() => navigation.navigate('ActorProfile', { actorId: String(item.id) })}
-                  >
-                    <Image source={{ uri: item.profilePath || FALLBACK_ACTOR }} style={styles.actorImage} />
-                    <Text style={styles.actorName} numberOfLines={2}>{item.name}</Text>
-                    <Text style={styles.actorMeta} numberOfLines={1}>{item.knownForDepartment || 'Actor'}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
-          )}
-
-          {results.length > 0 && (
-            <View>
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.row}
+          contentContainerStyle={styles.resultsListContent}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.listHeaderWrap}>
+              {actorResults.length > 0 && (
+                <View style={styles.actorSection}>
+                  <Text style={styles.sectionTitle}>Actors</Text>
+                  <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    data={actorResults}
+                    keyExtractor={(item) => String(item.id)}
+                    contentContainerStyle={styles.actorList}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.actorCard}
+                        onPress={() => navigation.navigate('ActorProfile', { actorId: String(item.id) })}
+                      >
+                        <Image source={{ uri: item.profilePath || FALLBACK_ACTOR }} style={styles.actorImage} />
+                        <Text style={styles.actorName} numberOfLines={2}>{item.name}</Text>
+                        <Text style={styles.actorMeta} numberOfLines={1}>{item.knownForDepartment || 'Actor'}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              )}
               <Text style={styles.sectionTitle}>Movies</Text>
-              <FlatList
-                data={results}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                columnWrapperStyle={styles.row}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.movieItem}
-                    onPress={() => navigation.navigate('MovieDetail', { movie: item })}
-                  >
-                    <Image
-                      source={{ uri: item.poster }}
-                      style={styles.moviePoster}
-                    />
-                    <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
-                    <Text style={styles.movieYear}>
-                      {new Date(item.releaseDate).getFullYear()}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
             </View>
+          }
+          ListEmptyComponent={
+            <Text style={styles.emptyMoviesText}>No movie results for this search.</Text>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.movieItem}
+              onPress={() => navigation.navigate('MovieDetail', { movie: item })}
+            >
+              <Image
+                source={{ uri: item.poster }}
+                style={styles.moviePoster}
+              />
+              <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
+              <Text style={styles.movieYear}>
+                {new Date(item.releaseDate).getFullYear()}
+              </Text>
+            </TouchableOpacity>
           )}
-        </View>
+        />
       )}
     </View>
   );
@@ -135,9 +137,11 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
   },
-  resultsWrap: {
-    flex: 1,
-    paddingBottom: 10,
+  resultsListContent: {
+    paddingBottom: 16,
+  },
+  listHeaderWrap: {
+    marginBottom: 8,
   },
   sectionTitle: {
     color: '#fff',
@@ -152,18 +156,18 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   actorCard: {
-    width: 122,
+    width: 132,
     marginRight: 12,
-    backgroundColor: '#1f1f1f',
-    borderColor: '#2f2f2f',
+    backgroundColor: '#222222',
+    borderColor: '#343434',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 8,
+    borderRadius: 14,
+    padding: 9,
   },
   actorImage: {
     width: '100%',
-    height: 150,
-    borderRadius: 8,
+    height: 165,
+    borderRadius: 10,
     backgroundColor: '#2a2a2a',
   },
   actorName: {
@@ -176,6 +180,11 @@ const styles = StyleSheet.create({
     color: '#a3a3a3',
     fontSize: 11,
     marginTop: 3,
+  },
+  emptyMoviesText: {
+    color: '#8d8d8d',
+    fontSize: 13,
+    marginBottom: 16,
   },
   row: {
     justifyContent: 'space-between',

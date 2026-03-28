@@ -65,9 +65,17 @@ export const Header: React.FC = () => {
         <div className="flex items-center justify-between h-14 gap-4">
 
           {/* Logo */}
-          <Link to="/" className="flex-shrink-0 flex items-center gap-1.5 group">
-            <span className="text-xl font-bold text-red-500 group-hover:text-red-400 transition-colors">Watch</span>
-            <span className="text-xl font-bold text-white/50 group-hover:text-white/70 transition-colors">Together</span>
+          <Link to="/" className="flex-shrink-0 flex items-center gap-2.5 group">
+            <span className="h-10 w-16 rounded-xl grid place-items-center overflow-hidden px-1">
+              <img
+                src="/watch-togther-logo.png"
+                alt="Watch Together"
+                className="h-9 w-14 object-contain"
+              />
+            </span>
+            <span className="text-sm md:text-base font-semibold tracking-wide text-white/80 group-hover:text-white transition-colors">
+              Watch Together
+            </span>
           </Link>
 
           {/* Nav */}

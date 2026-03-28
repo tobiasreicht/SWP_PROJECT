@@ -61,7 +61,7 @@ function MainTabs() {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{ title: 'Film Tracker' }}
+        options={{ title: 'Watch Together' }}
       />
       <Tab.Screen
         name="Explore"
