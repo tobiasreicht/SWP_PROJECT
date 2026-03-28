@@ -3,7 +3,10 @@ import { PrismaClient } from '@prisma/client';
 import { readTokenMiddleware } from '../middleware/index.js';
 import {
   fetchMovieDetails,
+  fetchMovieCast,
+  fetchActorProfile,
   searchTMDB,
+  searchActorsTMDB,
   getTrendingMovies,
   getNewReleases,
   discoverMovies,
@@ -396,6 +399,107 @@ router.get('/search', readTokenMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to search movies' });
+  }
+});
+
+// Search actors
+router.get('/actors/search', readTokenMiddleware, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    const useTMDB = !!process.env.TMDB_API_KEY;
+    if (!useTMDB) {
+      return res.json([]);
+    }
+
+    const data = await searchActorsTMDB(String(q));
+    return res.json(data.results || []);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to search actors' });
+  }
+});
+
+// Get actor profile details and movie credits
+router.get('/actors/:actorId', readTokenMiddleware, async (req, res) => {
+  try {
+    const { actorId } = req.params;
+    const useTMDB = !!process.env.TMDB_API_KEY;
+
+    if (!useTMDB) {
+      return res.status(404).json({ error: 'Actor data not available without TMDB' });
+    }
+
+    const parsedId = Number(actorId);
+    if (!Number.isFinite(parsedId)) {
+      return res.status(400).json({ error: 'Invalid actor id' });
+    }
+
+    const profile = await fetchActorProfile(parsedId);
+    return res.json(profile);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to fetch actor profile' });
+  }
+});
+
+// Get cast for a single movie
+router.get('/:id/cast', readTokenMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const useTMDB = !!process.env.TMDB_API_KEY;
+
+    if (!useTMDB) {
+      const movie = await prisma.movie.findUnique({ where: { id } });
+      if (!movie) {
+        return res.status(404).json({ error: 'Movie not found' });
+      }
+
+      const cast = JSON.parse(movie.cast || '[]');
+      return res.json(
+        (Array.isArray(cast) ? cast : []).slice(0, limit).map((name: string, index: number) => ({
+          id: `local-${index}`,
+          name,
+          profilePath: '',
+          character: undefined,
+          knownForDepartment: 'Acting',
+        }))
+      );
+    }
+
+    const maybeTmdbId = Number(id);
+    if (Number.isFinite(maybeTmdbId)) {
+      const cast = await fetchMovieCast(maybeTmdbId, limit);
+      return res.json(cast);
+    }
+
+    const movie = await prisma.movie.findUnique({ where: { id } });
+    if (!movie) {
+      return res.status(404).json({ error: 'Movie not found' });
+    }
+
+    if (!movie.tmdbId) {
+      const cast = JSON.parse(movie.cast || '[]');
+      return res.json(
+        (Array.isArray(cast) ? cast : []).slice(0, limit).map((name: string, index: number) => ({
+          id: `local-${index}`,
+          name,
+          profilePath: '',
+          character: undefined,
+          knownForDepartment: 'Acting',
+        }))
+      );
+    }
+
+    const cast = await fetchMovieCast(movie.tmdbId, limit);
+    return res.json(cast);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to fetch cast' });
   }
 });
 

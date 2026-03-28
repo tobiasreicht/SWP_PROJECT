@@ -100,7 +100,7 @@ export const Header: React.FC = () => {
                 <input
                   type="text"
                   autoFocus
-                  placeholder="Search…"
+                  placeholder="Search movies or actors…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   onBlur={() => { if (!searchQuery) setShowSearch(false); }}

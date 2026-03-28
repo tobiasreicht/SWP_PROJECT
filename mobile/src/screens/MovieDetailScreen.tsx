@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,16 +9,45 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  FlatList,
+  Modal,
+  Share,
 } from 'react-native';
-import { Movie, Rating } from '../types';
-import { watchlistAPI, ratingsAPI } from '../services/api';
+import { Actor, Movie, Rating } from '../types';
+import { friendsAPI, messagesAPI, moviesAPI, watchlistAPI, ratingsAPI } from '../services/api';
 
-export function MovieDetailScreen({ route }: any) {
+const FALLBACK_ACTOR = 'https://placehold.co/200x300/1f2937/e5e7eb?text=Actor';
+
+export function MovieDetailScreen({ route, navigation }: any) {
   const { movie } = route.params as { movie: Movie };
   const [rating, setRating] = useState<number | null>(null);
   const [review, setReview] = useState('');
   const [loading, setLoading] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [castActors, setCastActors] = useState<Actor[]>([]);
+  const [loadingCast, setLoadingCast] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [friends, setFriends] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [sharingToFriendId, setSharingToFriendId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadCast();
+  }, [movie.id]);
+
+  const loadCast = async () => {
+    try {
+      setLoadingCast(true);
+      const targetId = String(movie.tmdbId || movie.id);
+      const response = await moviesAPI.getCast(targetId, 20);
+      setCastActors(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Failed to load cast:', error);
+      setCastActors([]);
+    } finally {
+      setLoadingCast(false);
+    }
+  };
 
   const handleAddToWatchlist = async () => {
     try {
@@ -53,6 +82,81 @@ export function MovieDetailScreen({ route }: any) {
       Alert.alert('Error', 'Failed to rate movie');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getSharePayload = () => {
+    const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : '';
+    const tmdbId = movie.tmdbId || Number(movie.id);
+    const tmdbUrl = Number.isFinite(tmdbId)
+      ? `https://www.themoviedb.org/movie/${tmdbId}`
+      : '';
+
+    const message = [
+      `Check this movie: ${movie.title}${year ? ` (${year})` : ''}`,
+      `Rating: ${movie.rating.toFixed(1)}/10`,
+      movie.description,
+      tmdbUrl,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    return {
+      message,
+      tmdbId: Number.isFinite(tmdbId) ? tmdbId : undefined,
+    };
+  };
+
+  const loadFriendsForShare = async () => {
+    try {
+      setLoadingFriends(true);
+      const response = await friendsAPI.getAll();
+      const mapped = (Array.isArray(response.data) ? response.data : []).map((entry: any) => ({
+        id: String(entry.id),
+        name: String(entry.name || entry.username || 'Friend'),
+      }));
+      setFriends(mapped);
+    } catch (error) {
+      console.error('Failed to load friends for share:', error);
+      Alert.alert('Error', 'Could not load friends.');
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+
+  const handleOpenShare = async () => {
+    setShareModalOpen(true);
+    await loadFriendsForShare();
+  };
+
+  const handleShareToFriend = async (friendId: string) => {
+    try {
+      setSharingToFriendId(friendId);
+      const payload = getSharePayload();
+      await messagesAPI.send(friendId, {
+        text: `I think you'll like this one!`,
+        movieTmdbId: payload.tmdbId,
+        movieTitle: movie.title,
+        moviePoster: movie.poster,
+      });
+      setShareModalOpen(false);
+      Alert.alert('Shared', 'Movie shared in chat.');
+    } catch (error) {
+      console.error('Failed to share movie in chat:', error);
+      Alert.alert('Error', 'Failed to share movie in chat.');
+    } finally {
+      setSharingToFriendId(null);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      const payload = getSharePayload();
+      await Share.share({
+        message: payload.message,
+      });
+    } catch (error) {
+      console.error('Native share failed:', error);
     }
   };
 
@@ -102,10 +206,34 @@ export function MovieDetailScreen({ route }: any) {
           </>
         )}
 
-        {movie.cast.length > 0 && (
+        {(loadingCast || castActors.length > 0 || movie.cast.length > 0) && (
           <>
             <Text style={styles.sectionTitle}>Cast</Text>
-            <Text style={styles.castText}>{movie.cast.join(', ')}</Text>
+            {loadingCast ? (
+              <ActivityIndicator size="small" color="#dc2626" style={{ marginBottom: 8 }} />
+            ) : castActors.length > 0 ? (
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={castActors}
+                keyExtractor={(item) => String(item.id)}
+                contentContainerStyle={styles.castList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.castCard}
+                    onPress={() => navigation.navigate('ActorProfile', { actorId: String(item.id) })}
+                  >
+                    <Image source={{ uri: item.profilePath || FALLBACK_ACTOR }} style={styles.castImage} />
+                    <View style={styles.castOverlay}>
+                      <Text style={styles.castName} numberOfLines={2}>{item.name}</Text>
+                      <Text style={styles.castRole} numberOfLines={1}>{item.character || item.knownForDepartment || 'Actor'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <Text style={styles.castText}>{movie.cast.join(', ')}</Text>
+            )}
           </>
         )}
 
@@ -140,6 +268,13 @@ export function MovieDetailScreen({ route }: any) {
             onPress={() => setShowReviewForm(!showReviewForm)}
           >
             <Text style={styles.buttonText}>Rate Movie</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton]}
+            onPress={handleOpenShare}
+          >
+            <Text style={styles.buttonText}>Share Movie</Text>
           </TouchableOpacity>
         </View>
 
@@ -181,6 +316,57 @@ export function MovieDetailScreen({ route }: any) {
           </View>
         )}
       </View>
+
+      <Modal
+        visible={shareModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShareModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.shareSheet}>
+            <Text style={styles.shareTitle}>Share {movie.title}</Text>
+
+            {loadingFriends ? (
+              <View style={styles.shareLoadingWrap}>
+                <ActivityIndicator size="small" color="#dc2626" />
+              </View>
+            ) : friends.length === 0 ? (
+              <Text style={styles.shareEmptyText}>No friends available to share in chat.</Text>
+            ) : (
+              <FlatList
+                data={friends}
+                keyExtractor={(item) => item.id}
+                style={styles.shareFriendList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.shareFriendRow}
+                    onPress={() => handleShareToFriend(item.id)}
+                    disabled={sharingToFriendId === item.id}
+                  >
+                    <View style={styles.shareFriendAvatar}>
+                      <Text style={styles.shareFriendAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <Text style={styles.shareFriendName}>{item.name}</Text>
+                    <Text style={styles.shareFriendAction}>
+                      {sharingToFriendId === item.id ? 'Sending...' : 'Send'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+
+            <View style={styles.shareButtonsRow}>
+              <TouchableOpacity style={styles.shareOutlineButton} onPress={handleNativeShare}>
+                <Text style={styles.shareOutlineButtonText}>Share Externally</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.shareCloseButton} onPress={() => setShareModalOpen(false)}>
+                <Text style={styles.shareCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -272,6 +458,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  castList: {
+    paddingBottom: 8,
+  },
+  castCard: {
+    width: 132,
+    marginRight: 10,
+    backgroundColor: '#161616',
+    borderColor: '#333',
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  castImage: {
+    width: '100%',
+    height: 190,
+    backgroundColor: '#2a2a2a',
+  },
+  castOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  castName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  castRole: {
+    color: '#d0d0d0',
+    marginTop: 3,
+    fontSize: 11,
+  },
   platformList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -358,5 +580,101 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  shareSheet: {
+    backgroundColor: '#181818',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+    maxHeight: '70%',
+    borderTopColor: '#2b2b2b',
+    borderTopWidth: 1,
+  },
+  shareTitle: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  shareLoadingWrap: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  shareEmptyText: {
+    color: '#a3a3a3',
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  shareFriendList: {
+    maxHeight: 280,
+  },
+  shareFriendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomColor: '#2a2a2a',
+    borderBottomWidth: 1,
+  },
+  shareFriendAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  shareFriendAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  shareFriendName: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+  },
+  shareFriendAction: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  shareButtonsRow: {
+    flexDirection: 'row',
+    marginTop: 14,
+    gap: 10,
+  },
+  shareOutlineButton: {
+    flex: 1,
+    borderColor: '#454545',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: '#242424',
+  },
+  shareOutlineButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  shareCloseButton: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: '#dc2626',
+  },
+  shareCloseButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

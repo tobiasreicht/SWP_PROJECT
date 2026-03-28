@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, Star, Plus, Check, Share2, Heart, ExternalLink } from 'lucide-react';
-import { Movie, Rating } from '../../types';
+import { Movie, Actor, Rating } from '../../types';
 import { Modal, Button, Badge } from '../ui';
 import { useMessengerStore, useRatingStore, useWatchlistStore } from '../../store';
 import { moviesAPI } from '../../services/tmdb';
 import { getPosterFallbackUrl, resolvePosterUrl } from '../../utils/media';
+import { useNavigate } from 'react-router-dom';
 
 interface MovieModalProps {
   movie: Movie | null;
@@ -17,6 +18,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const navigate = useNavigate();
   const { createRating } = useRatingStore();
   const { items: watchlistItems, fetchWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlistStore();
   const { openMessenger } = useMessengerStore();
@@ -24,6 +26,8 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   const [reviewText, setReviewText] = useState('');
   const [platforms, setPlatforms] = useState(movie?.streamingPlatforms || []);
   const [loadingPlatforms, setLoadingPlatforms] = useState(false);
+  const [castActors, setCastActors] = useState<Actor[]>([]);
+  const [loadingCast, setLoadingCast] = useState(false);
 
   const tmdbCandidate = movie ? movie.tmdbId || Number(movie.id) : NaN;
   const matchedWatchlistItem = movie
@@ -80,6 +84,40 @@ export const MovieModal: React.FC<MovieModalProps> = ({
     }
 
     return () => { mounted = false };
+  }, [isOpen, movie]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!isOpen || !movie) {
+      setCastActors([]);
+      return;
+    }
+
+    (async () => {
+      setLoadingCast(true);
+      try {
+        const id = String((movie as any).tmdbId || movie.id);
+        const resp = await moviesAPI.getCast(id, 20);
+        if (!mounted) {
+          return;
+        }
+        setCastActors(Array.isArray(resp.data) ? resp.data : []);
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setCastActors([]);
+      } finally {
+        if (mounted) {
+          setLoadingCast(false);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [isOpen, movie]);
 
   if (!movie) return null;
@@ -197,7 +235,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
                 <p className="text-gray-400">No streaming information available.</p>
               )}
             </div>
-            {/* Director & Cast */}
+            {/* Director */}
             <div className="space-y-2 text-base">
               {movie.director && (
                 <p>
@@ -205,10 +243,42 @@ export const MovieModal: React.FC<MovieModalProps> = ({
                   <span className="text-white ml-2">{movie.director}</span>
                 </p>
               )}
-              <p>
-                <span className="text-gray-400">Cast:</span>
-                <span className="text-white ml-2">{movie.cast.join(', ')}</span>
-              </p>
+            </div>
+            {/* Cast */}
+            <div>
+              <h3 className="text-white font-semibold mb-3 text-xl">Cast</h3>
+              {loadingCast ? (
+                <p className="text-gray-400">Loading cast...</p>
+              ) : castActors.length > 0 ? (
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                  {castActors.map((actor) => (
+                    <button
+                      key={String(actor.id)}
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        navigate(`/actors/${actor.id}`);
+                      }}
+                      className="group relative min-w-[148px] w-[148px] text-left overflow-hidden rounded-2xl border border-white/[0.1] bg-white/[0.03] shadow-lg hover:border-red-500/40 transition-colors"
+                    >
+                      <img
+                        src={actor.profilePath || 'https://placehold.co/200x300/1f2937/e5e7eb?text=Actor'}
+                        alt={actor.name}
+                        className="w-full h-52 object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
+                        <p className="text-sm text-white font-semibold line-clamp-2">{actor.name}</p>
+                        <p className="text-xs text-gray-300 mt-1 line-clamp-1">{actor.character || actor.knownForDepartment || 'Actor'}</p>
+                      </div>
+                      <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/60 border border-white/20 text-gray-100">
+                        Cast
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400">No cast data available.</p>
+              )}
             </div>
             {/* Rating Section */}
             <div className="border-t border-white/10 pt-6">

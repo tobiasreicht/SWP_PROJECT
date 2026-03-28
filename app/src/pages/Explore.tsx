@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MovieCard, MovieModal } from '../components/movie';
-import { Movie } from '../types';
+import { Actor, Movie } from '../types';
 import { moviesAPI } from '../services/tmdb';
 import { useWatchlistStore } from '../store';
 
@@ -15,10 +16,13 @@ const GENRES = [
 ];
 
 export const Explore: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { fetchWatchlist, fetchWatchlistCount } = useWatchlistStore();
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [actors, setActors] = useState<Actor[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
@@ -27,27 +31,48 @@ export const Explore: React.FC = () => {
 
   useEffect(() => { fetchWatchlist(); fetchWatchlistCount(); }, []);
 
+  useEffect(() => {
+    const query = searchParams.get('q') || '';
+    if (!query.trim()) {
+      return;
+    }
+
+    setInputValue(query);
+    void runSearch(query);
+  }, [searchParams]);
+
   const visibleMovies = useMemo(() => movies.slice(0, visibleCount), [movies, visibleCount]);
   const hasMore = movies.length > visibleCount;
 
   useEffect(() => { setVisibleCount(INITIAL_VISIBLE_MOVIES); }, [movies]);
 
+  const runSearch = async (query: string) => {
+    setIsLoading(true);
+    setSelectedGenre('');
+    setSearchQuery(query.trim());
+    try {
+      const [movieRes, actorRes] = await Promise.all([
+        moviesAPI.search(query.trim()),
+        moviesAPI.searchActors(query.trim()),
+      ]);
+      setMovies(movieRes.data);
+      setActors(actorRes.data);
+    } catch { /* silent */ } finally { setIsLoading(false); }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
-    setIsLoading(true);
-    setSelectedGenre('');
-    setSearchQuery(inputValue.trim());
-    try {
-      const res = await moviesAPI.search(inputValue.trim());
-      setMovies(res.data);
-    } catch { /* silent */ } finally { setIsLoading(false); }
+    setSearchParams({ q: inputValue.trim() });
+    await runSearch(inputValue.trim());
   };
 
   const handleGenreSelect = async (genre: string) => {
     setSelectedGenre(genre);
     setSearchQuery('');
+    setActors([]);
     setInputValue('');
+    setSearchParams({});
     setIsLoading(true);
     try {
       const res = await moviesAPI.getByGenre(genre);
@@ -60,6 +85,8 @@ export const Explore: React.FC = () => {
     setSearchQuery('');
     setSelectedGenre('');
     setMovies([]);
+    setActors([]);
+    setSearchParams({});
   };
 
   return (
@@ -69,7 +96,7 @@ export const Explore: React.FC = () => {
         {/* Page header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white tracking-tight">Explore</h1>
-          <p className="text-gray-400 mt-1 text-sm">Search movies and series or browse by genre</p>
+          <p className="text-gray-400 mt-1 text-sm">Search movies and actors or browse by genre</p>
         </div>
 
         {/* Search */}
@@ -113,8 +140,34 @@ export const Explore: React.FC = () => {
         {/* Results header */}
         {(searchQuery || selectedGenre) && !isLoading && (
           <p className="text-gray-400 text-sm mb-4">
-            {movies.length} results {searchQuery ? `for "${searchQuery}"` : `in ${selectedGenre}`}
+            {searchQuery
+              ? `${movies.length} movies and ${actors.length} actors for "${searchQuery}"`
+              : `${movies.length} results in ${selectedGenre}`}
           </p>
+        )}
+
+        {searchQuery && actors.length > 0 && !isLoading && (
+          <>
+            <h2 className="text-white text-lg font-semibold mb-3">Actors</h2>
+            <div className="flex gap-3 overflow-x-auto pb-3 mb-7 scrollbar-hide">
+              {actors.map(actor => (
+                <button
+                  key={String(actor.id)}
+                  type="button"
+                  onClick={() => navigate(`/actors/${actor.id}`)}
+                  className="min-w-[160px] text-left rounded-2xl bg-white/[0.04] border border-white/[0.1] p-3 hover:bg-white/[0.1] transition-colors"
+                >
+                  <img
+                    src={actor.profilePath || 'https://placehold.co/200x300/1f2937/e5e7eb?text=Actor'}
+                    alt={actor.name}
+                    className="w-full h-40 object-cover rounded-lg border border-white/[0.08]"
+                  />
+                  <p className="text-white font-semibold text-sm mt-2 line-clamp-2">{actor.name}</p>
+                  <p className="text-gray-400 text-xs mt-1">{actor.knownForDepartment || 'Actor'}</p>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Grid */}
@@ -158,7 +211,7 @@ export const Explore: React.FC = () => {
               {searchQuery || selectedGenre ? 'No results found' : 'Search or pick a genre to start'}
             </p>
             <p className="text-gray-500 text-sm mt-1">
-              {searchQuery ? `Try a different search term` : 'Thousands of titles await'}
+              {searchQuery ? `Try a different search term for movies and actors` : 'Thousands of titles await'}
             </p>
           </div>
         )}

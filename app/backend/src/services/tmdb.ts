@@ -1,6 +1,18 @@
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
+const isAgeRestrictedTrailer = (video: any): boolean => {
+  const text = `${video?.name || ''} ${video?.type || ''}`.toLowerCase();
+  return (
+    text.includes('red band') ||
+    text.includes('redband') ||
+    text.includes('restricted') ||
+    text.includes(' uncensored') ||
+    text.includes('18+') ||
+    text.includes('nsfw')
+  );
+};
+
 function tmdbKey(): string {
   return process.env.TMDB_API_KEY || '';
 }
@@ -55,9 +67,9 @@ export async function fetchMovieDetails(tmdbId: number) {
       const videos = videoData.results || [];
 
       const trailer =
-        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Trailer' && video.official) ||
-        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Trailer') ||
-        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Teaser');
+        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Trailer' && video.official && !isAgeRestrictedTrailer(video)) ||
+        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Trailer' && !isAgeRestrictedTrailer(video)) ||
+        videos.find((video: any) => video.site === 'YouTube' && video.type === 'Teaser' && !isAgeRestrictedTrailer(video));
 
       if (trailer?.key) {
         trailerUrl = `https://www.youtube-nocookie.com/embed/${trailer.key}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1&playsinline=1&loop=1&playlist=${trailer.key}&iv_load_policy=3&cc_load_policy=0&fs=0&disablekb=1`;
@@ -145,4 +157,139 @@ export async function discoverByGenreName(genreName: string, page = 1) {
   const id = map[genreName.toLowerCase()];
   if (!id) return { results: [] };
   return discoverMovies(page, [String(id)]);
+}
+
+export interface TMDBActor {
+  id: number;
+  name: string;
+  character?: string;
+  profilePath: string;
+  knownForDepartment?: string;
+}
+
+export interface TMDBActorProfile {
+  id: number;
+  name: string;
+  biography: string;
+  birthday: string | null;
+  placeOfBirth: string | null;
+  knownForDepartment: string | null;
+  popularity: number;
+  profilePath: string;
+  movies: Array<{
+    id: string;
+    tmdbId: number;
+    title: string;
+    description: string;
+    releaseDate: Date;
+    type: 'movie' | 'series';
+    genres: string[];
+    director?: string;
+    cast: string[];
+    poster: string;
+    backdrop: string;
+    runtime?: number;
+    rating: number;
+    trailerUrl?: string | null;
+    streamingPlatforms: any[];
+    character?: string;
+  }>;
+}
+
+function mapCreditToMovieSummary(credit: any) {
+  return {
+    id: String(credit.id),
+    tmdbId: credit.id,
+    title: credit.title || credit.original_title || 'Unknown title',
+    description: credit.overview || '',
+    releaseDate: credit.release_date ? new Date(credit.release_date) : new Date(),
+    type: 'movie' as const,
+    genres: [],
+    director: undefined,
+    cast: [],
+    poster: credit.poster_path ? IMAGE_BASE + credit.poster_path : '',
+    backdrop: credit.backdrop_path ? IMAGE_BASE + credit.backdrop_path : '',
+    runtime: undefined,
+    rating: typeof credit.vote_average === 'number' ? credit.vote_average : 0,
+    trailerUrl: null,
+    streamingPlatforms: [],
+    character: credit.character || undefined,
+  };
+}
+
+export async function fetchMovieCast(tmdbId: number, limit = 20): Promise<TMDBActor[]> {
+  if (!tmdbKey()) throw new Error('TMDB API key not configured');
+
+  const url = `${TMDB_BASE}/movie/${tmdbId}/credits?api_key=${tmdbKey()}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TMDB cast fetch failed: ${resp.status}`);
+
+  const data = await resp.json();
+  const cast = Array.isArray(data.cast) ? data.cast : [];
+
+  return cast.slice(0, limit).map((member: any) => ({
+    id: member.id,
+    name: member.name,
+    character: member.character || undefined,
+    profilePath: member.profile_path ? IMAGE_BASE + member.profile_path : '',
+    knownForDepartment: member.known_for_department || undefined,
+  }));
+}
+
+export async function searchActorsTMDB(query: string, page = 1) {
+  if (!tmdbKey()) throw new Error('TMDB API key not configured');
+
+  const url = `${TMDB_BASE}/search/person?api_key=${tmdbKey()}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TMDB actor search failed: ${resp.status}`);
+
+  const data = await resp.json();
+  const results = Array.isArray(data.results) ? data.results : [];
+
+  return {
+    page: data.page || 1,
+    total_results: data.total_results || results.length,
+    results: results.map((actor: any) => ({
+      id: actor.id,
+      name: actor.name,
+      character: undefined,
+      profilePath: actor.profile_path ? IMAGE_BASE + actor.profile_path : '',
+      knownForDepartment: actor.known_for_department || undefined,
+    })),
+  };
+}
+
+export async function fetchActorProfile(tmdbActorId: number): Promise<TMDBActorProfile> {
+  if (!tmdbKey()) throw new Error('TMDB API key not configured');
+
+  const url = `${TMDB_BASE}/person/${tmdbActorId}?api_key=${tmdbKey()}&append_to_response=movie_credits`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TMDB actor profile fetch failed: ${resp.status}`);
+
+  const data = await resp.json();
+  const castCredits = Array.isArray(data.movie_credits?.cast) ? data.movie_credits.cast : [];
+
+  const deduped = new Map<number, any>();
+  castCredits.forEach((credit: any) => {
+    if (!deduped.has(credit.id)) {
+      deduped.set(credit.id, credit);
+    }
+  });
+
+  const movies = [...deduped.values()]
+    .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
+    .slice(0, 60)
+    .map(mapCreditToMovieSummary);
+
+  return {
+    id: data.id,
+    name: data.name,
+    biography: data.biography || '',
+    birthday: data.birthday || null,
+    placeOfBirth: data.place_of_birth || null,
+    knownForDepartment: data.known_for_department || null,
+    popularity: typeof data.popularity === 'number' ? data.popularity : 0,
+    profilePath: data.profile_path ? IMAGE_BASE + data.profile_path : '',
+    movies,
+  };
 }

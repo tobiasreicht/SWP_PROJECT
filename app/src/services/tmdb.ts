@@ -5,7 +5,7 @@
  */
 
 import { moviesAPI as backendMoviesAPI } from './api';
-import type { Movie, StreamingPlatform } from '../types';
+import type { Actor, ActorProfile, Movie, StreamingPlatform } from '../types';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
@@ -72,6 +72,18 @@ const PROVIDER_MAP: Record<number, StreamingPlatform['platform']> = {
   15: 'Hulu',
 };
 
+const isAgeRestrictedTrailer = (video: any): boolean => {
+  const text = `${video?.name || ''} ${video?.type || ''}`.toLowerCase();
+  return (
+    text.includes('red band') ||
+    text.includes('redband') ||
+    text.includes('restricted') ||
+    text.includes(' uncensored') ||
+    text.includes('18+') ||
+    text.includes('nsfw')
+  );
+};
+
 // ── Low-level fetch helper ────────────────────────────────────────────────────
 async function tmdbFetch<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
   const url = new URL(`${TMDB_BASE}${path}`);
@@ -114,6 +126,36 @@ function mapItem(item: any, forcedType?: 'movie' | 'tv'): Movie {
     rating: item.vote_average ?? 0,
     trailerUrl: item._trailerUrl ?? null,
     streamingPlatforms: item._platforms ?? [],
+  };
+}
+
+function mapActor(item: any): Actor {
+  return {
+    id: item.id,
+    name: item.name,
+    character: item.character ?? undefined,
+    profilePath: item.profile_path ? `${TMDB_IMG}/w500${item.profile_path}` : '',
+    knownForDepartment: item.known_for_department ?? undefined,
+  };
+}
+
+function mapActorCreditMovie(item: any): Movie {
+  return {
+    id: String(item.id),
+    tmdbId: item.id,
+    title: item.title ?? item.original_title ?? 'Unknown',
+    description: item.overview ?? '',
+    releaseDate: new Date(item.release_date ?? '2000-01-01'),
+    type: 'movie',
+    genres: [],
+    director: undefined,
+    cast: [],
+    poster: item.poster_path ? `${TMDB_IMG}/w500${item.poster_path}` : '',
+    backdrop: item.backdrop_path ? `${TMDB_IMG}/w1280${item.backdrop_path}` : '',
+    runtime: undefined,
+    rating: item.vote_average ?? 0,
+    trailerUrl: null,
+    streamingPlatforms: [],
   };
 }
 
@@ -218,6 +260,70 @@ export const moviesAPI = {
     return { data: results };
   },
 
+  searchActors: async (query: string): Promise<{ data: Actor[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.searchActors(query);
+      return { data: response.data };
+    }
+
+    const res = await tmdbFetch<any>('/search/person', { query, include_adult: 'false' });
+    const results = Array.isArray(res.results) ? res.results : [];
+    return { data: results.map(mapActor) };
+  },
+
+  getCast: async (id: string, limit = 20): Promise<{ data: Actor[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getCast(id, limit);
+      return { data: response.data };
+    }
+
+    let credits: any;
+    try {
+      credits = await tmdbFetch<any>(`/movie/${id}/credits`);
+    } catch {
+      credits = await tmdbFetch<any>(`/tv/${id}/credits`);
+    }
+
+    const cast = Array.isArray(credits.cast) ? credits.cast : [];
+    return { data: cast.slice(0, limit).map(mapActor) };
+  },
+
+  getActorProfile: async (actorId: string): Promise<{ data: ActorProfile }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getActorProfile(actorId);
+      return { data: response.data };
+    }
+
+    const person = await tmdbFetch<any>(`/person/${actorId}`, { append_to_response: 'movie_credits' });
+    const castCredits = Array.isArray(person.movie_credits?.cast) ? person.movie_credits.cast : [];
+    const deduped = new Map<number, any>();
+
+    castCredits.forEach((credit: any) => {
+      if (!deduped.has(credit.id)) {
+        deduped.set(credit.id, credit);
+      }
+    });
+
+    const movies = [...deduped.values()]
+      .sort((a: any, b: any) => (b.popularity ?? 0) - (a.popularity ?? 0))
+      .slice(0, 60)
+      .map(mapActorCreditMovie);
+
+    return {
+      data: {
+        id: person.id,
+        name: person.name,
+        biography: person.biography ?? '',
+        birthday: person.birthday ?? null,
+        placeOfBirth: person.place_of_birth ?? null,
+        knownForDepartment: person.known_for_department ?? null,
+        popularity: person.popularity ?? 0,
+        profilePath: person.profile_path ? `${TMDB_IMG}/w500${person.profile_path}` : '',
+        movies,
+      },
+    };
+  },
+
   /** Single movie/TV details with cast, trailer, and streaming providers */
   getById: async (id: string): Promise<{ data: Movie }> => {
     if (!shouldUseDirectTMDB()) {
@@ -249,7 +355,10 @@ export const moviesAPI = {
     // YouTube trailer
     const videos: any[] = rawItem.videos?.results ?? [];
     const trailer = videos.find(
-      (v: any) => v.site === 'YouTube' && v.type === 'Trailer'
+      (v: any) =>
+        v.site === 'YouTube' &&
+        v.type === 'Trailer' &&
+        !isAgeRestrictedTrailer(v)
     );
     const trailerUrl = trailer
       ? `https://www.youtube.com/embed/${trailer.key}?autoplay=1&mute=1&loop=1`

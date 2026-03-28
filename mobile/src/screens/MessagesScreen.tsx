@@ -1,48 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { Message } from '../types';
-import { messagesAPI } from '../services/api';
+import { messagesAPI, moviesAPI } from '../services/api';
 import { useAuthStore } from '../store';
+import { useFocusEffect } from '@react-navigation/native';
 
 export function MessagesScreen({ route, navigation }: any) {
-  const { friendId } = route.params;
+  const friendId = route?.params?.friendId as string | undefined;
+  const friendName = route?.params?.friendName as string | undefined;
   const { user } = useAuthStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [pollingId, setPollingId] = useState<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    loadMessages();
-    const interval = setInterval(loadMessages, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    if (friendName) {
+      navigation.setOptions({ title: friendName });
+    }
+  }, [friendName, navigation]);
 
-  const loadMessages = async () => {
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadMessages();
+      const interval = setInterval(() => {
+        void loadMessages(true);
+      }, 2500);
+      setPollingId(interval);
+
+      return () => {
+        clearInterval(interval);
+      };
+    }, [friendId])
+  );
+
+  useEffect(() => {
+    return () => {
+      if (pollingId) {
+        clearInterval(pollingId);
+      }
+    };
+  }, [pollingId]);
+
+  const loadMessages = async (silent = false) => {
+    if (!friendId) {
+      setLoading(false);
+      return;
+    }
+
     try {
+      if (!silent) {
+        setLoading(true);
+      }
       const response = await messagesAPI.getConversation(friendId);
-      setMessages(response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setMessages(data);
     } catch (error) {
       console.error('Failed to load messages:', error);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   const handleSendMessage = async () => {
-    if (!text.trim()) return;
+    if (!friendId || !text.trim()) return;
 
     try {
       setSending(true);
-      await messagesAPI.send(friendId, { text });
+      await messagesAPI.send(friendId, { text: text.trim() });
       setText('');
-      loadMessages();
+      await loadMessages(true);
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
       setSending(false);
     }
   };
+
+  const openSharedMovie = async (message: Message) => {
+    try {
+      const targetId = message.movieTmdbId ? String(message.movieTmdbId) : undefined;
+
+      if (targetId) {
+        const response = await moviesAPI.getById(targetId);
+        navigation.navigate('MovieDetail', { movie: response.data });
+        return;
+      }
+
+      if (message.movieTitle) {
+        const search = await moviesAPI.search(message.movieTitle);
+        const first = Array.isArray(search.data) ? search.data[0] : null;
+        if (first) {
+          navigation.navigate('MovieDetail', { movie: first });
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to open shared movie from chat:', error);
+    }
+  };
+
+  if (!friendId) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.centerContent}>
+          <Text style={styles.emptyState}>No conversation selected.</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -61,6 +130,7 @@ export function MessagesScreen({ route, navigation }: any) {
       <FlatList
         data={messages}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={messages.length === 0 ? styles.emptyList : undefined}
         renderItem={({ item }) => {
           const isFromMe = item.senderId === user?.id;
           return (
@@ -72,7 +142,7 @@ export function MessagesScreen({ route, navigation }: any) {
                 ]}
               >
                 {item.movieTitle ? (
-                  <>
+                  <TouchableOpacity onPress={() => openSharedMovie(item)} activeOpacity={0.85}>
                     {item.moviePoster && (
                       <Image
                         source={{ uri: item.moviePoster }}
@@ -80,7 +150,9 @@ export function MessagesScreen({ route, navigation }: any) {
                       />
                     )}
                     <Text style={styles.movieTitle}>{item.movieTitle}</Text>
-                  </>
+                    <Text style={styles.movieOpenHint}>Tap to open movie details</Text>
+                    {item.text ? <Text style={styles.message}>{item.text}</Text> : null}
+                  </TouchableOpacity>
                 ) : (
                   <Text style={styles.message}>{item.text}</Text>
                 )}
@@ -88,7 +160,7 @@ export function MessagesScreen({ route, navigation }: any) {
             </View>
           );
         }}
-        inverted
+        ListEmptyComponent={<Text style={styles.emptyState}>No messages yet. Start the conversation.</Text>}
       />
 
       <View style={styles.inputContainer}>
@@ -116,6 +188,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyList: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyState: {
+    color: '#999',
+    textAlign: 'center',
+    fontSize: 14,
   },
   messageRow: {
     paddingHorizontal: 15,
@@ -149,6 +235,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+    marginBottom: 4,
+  },
+  movieOpenHint: {
+    color: '#fca5a5',
+    fontSize: 11,
+    marginBottom: 6,
   },
   inputContainer: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image, Alert } from 'react-native';
 import { WatchlistItem } from '../types';
-import { watchlistAPI } from '../services/api';
+import { moviesAPI, watchlistAPI } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 
 export function WatchlistScreen({ navigation }: any) {
@@ -49,6 +49,22 @@ export function WatchlistScreen({ navigation }: any) {
     }
   };
 
+  const openMovieDetail = async (item: WatchlistItem) => {
+    try {
+      if (item.movie?.id) {
+        navigation.navigate('MovieDetail', { movie: item.movie });
+        return;
+      }
+
+      const targetId = String(item.movie?.tmdbId || item.movieId);
+      const response = await moviesAPI.getById(targetId);
+      navigation.navigate('MovieDetail', { movie: response.data });
+    } catch (error) {
+      console.error('Failed to open movie detail from watchlist:', error);
+      Alert.alert('Error', 'Failed to open movie details.');
+    }
+  };
+
   const filteredItems = filter === 'all'
     ? items
     : items.filter(item => item.status === filter);
@@ -86,7 +102,7 @@ export function WatchlistScreen({ navigation }: any) {
           data={filteredItems}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <View style={styles.itemContainer}>
+            <TouchableOpacity style={styles.itemContainer} onPress={() => openMovieDetail(item)} activeOpacity={0.9}>
               <Image
                 source={{ uri: item.movie?.poster }}
                 style={styles.poster}
@@ -114,7 +130,7 @@ export function WatchlistScreen({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           )}
         />
       )}

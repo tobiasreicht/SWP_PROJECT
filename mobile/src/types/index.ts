@@ -43,6 +43,26 @@ export interface Movie {
   streamingPlatforms: StreamingPlatform[];
 }
 
+export interface Actor {
+  id: number | string;
+  name: string;
+  character?: string;
+  profilePath: string;
+  knownForDepartment?: string;
+}
+
+export interface ActorProfile {
+  id: number;
+  name: string;
+  biography: string;
+  birthday: string | null;
+  placeOfBirth: string | null;
+  knownForDepartment: string | null;
+  popularity: number;
+  profilePath: string;
+  movies: Movie[];
+}
+
 export interface StreamingPlatform {
   platform: 'Netflix' | 'Prime Video' | 'Disney+' | 'Apple TV+' | 'HBO Max' | 'Hulu';
   url: string;

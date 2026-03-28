@@ -1,72 +1,164 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
-import { Friend } from '../types';
-import { friendsAPI, messagesAPI } from '../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { friendsAPI } from '../services/api';
 import { useFocusEffect } from '@react-navigation/native';
 
+type SocialTab = 'friends' | 'requests';
+
+interface FriendListItem {
+  id: string;
+  name: string;
+  username?: string;
+  avatar?: string;
+  tasteMatch?: number;
+  status?: string;
+  relationId?: string;
+  createdAt?: string;
+}
+
+interface FriendRequestItem {
+  id: string;
+  userId: string;
+  name: string;
+  username?: string;
+  avatar?: string;
+  status?: string;
+  createdAt?: string;
+}
+
+interface FriendSearchResult {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  avatar?: string;
+  relationStatus: 'none' | 'pending' | 'accepted' | 'blocked';
+}
+
 export function SocialScreen({ navigation }: any) {
-  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friends, setFriends] = useState<FriendListItem[]>([]);
+  const [requests, setRequests] = useState<FriendRequestItem[]>([]);
+  const [searchResults, setSearchResults] = useState<FriendSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [sendingRequestTo, setSendingRequestTo] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [tab, setTab] = useState<'friends' | 'requests'>('friends');
+  const [tab, setTab] = useState<SocialTab>('friends');
 
   useFocusEffect(
     React.useCallback(() => {
-      loadFriends();
+      void loadSocialData();
     }, [])
   );
 
-  const loadFriends = async () => {
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      void handleSearch(searchQuery.trim());
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  const loadSocialData = async () => {
     try {
       setLoading(true);
       const [friendsRes, requestsRes] = await Promise.all([
         friendsAPI.getAll(),
         friendsAPI.getRequests(),
       ]);
-      if (tab === 'friends') {
-        setFriends(friendsRes.data);
-      } else {
-        setFriends(requestsRes.data);
-      }
+
+      const mappedFriends = (Array.isArray(friendsRes.data) ? friendsRes.data : []).map((entry: any) => ({
+        id: String(entry.id),
+        relationId: entry.relationId ? String(entry.relationId) : undefined,
+        name: String(entry.name || entry.username || 'Friend'),
+        username: entry.username ? String(entry.username) : undefined,
+        avatar: entry.avatar ? String(entry.avatar) : undefined,
+        tasteMatch: typeof entry.tasteMatch === 'number' ? entry.tasteMatch : undefined,
+        status: entry.status ? String(entry.status) : undefined,
+        createdAt: entry.createdAt ? String(entry.createdAt) : undefined,
+      }));
+
+      const mappedRequests = (Array.isArray(requestsRes.data) ? requestsRes.data : []).map((entry: any) => ({
+        id: String(entry.id),
+        userId: String(entry.userId),
+        name: String(entry.name || entry.username || 'User'),
+        username: entry.username ? String(entry.username) : undefined,
+        avatar: entry.avatar ? String(entry.avatar) : undefined,
+        status: entry.status ? String(entry.status) : undefined,
+        createdAt: entry.createdAt ? String(entry.createdAt) : undefined,
+      }));
+
+      setFriends(mappedFriends);
+      setRequests(mappedRequests);
     } catch (error) {
-      console.error('Failed to load friends:', error);
+      console.error('Failed to load social data:', error);
+      Alert.alert('Error', 'Failed to load social data.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = async (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      loadFriends();
+    if (!query) {
+      setSearchResults([]);
       return;
     }
 
     try {
+      setSearching(true);
       const response = await friendsAPI.search(query);
-      setFriends(response.data);
+      setSearchResults(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Search failed:', error);
+    } finally {
+      setSearching(false);
     }
   };
 
   const handleAddFriend = async (identifier: string) => {
     try {
+      setSendingRequestTo(identifier);
       await friendsAPI.add({ identifier });
       Alert.alert('Success', 'Friend request sent');
-      loadFriends();
+      setSearchQuery('');
+      setSearchResults([]);
+      await loadSocialData();
     } catch (error) {
       Alert.alert('Error', 'Failed to add friend');
+    } finally {
+      setSendingRequestTo(null);
     }
   };
 
-  const handleAcceptRequest = async (friendId: string) => {
+  const handleAcceptRequest = async (requestId: string) => {
     try {
-      await friendsAPI.acceptRequest(friendId);
-      loadFriends();
+      await friendsAPI.acceptRequest(requestId);
+      await loadSocialData();
     } catch (error) {
       Alert.alert('Error', 'Failed to accept request');
     }
+  };
+
+  const listData = useMemo(() => {
+    if (searchQuery.trim() && tab === 'friends') {
+      return searchResults;
+    }
+
+    return tab === 'friends' ? friends : requests;
+  }, [searchQuery, tab, searchResults, friends, requests]);
+
+  const renderAvatar = (name: string) => {
+    const initial = name.trim().charAt(0).toUpperCase() || 'U';
+    return (
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{initial}</Text>
+      </View>
+    );
   };
 
   if (loading) {
@@ -81,10 +173,10 @@ export function SocialScreen({ navigation }: any) {
     <View style={styles.container}>
       <TextInput
         style={styles.searchInput}
-        placeholder="Search friends..."
+        placeholder="Search users to add..."
         placeholderTextColor="#666"
         value={searchQuery}
-        onChangeText={handleSearch}
+        onChangeText={setSearchQuery}
       />
 
       <View style={styles.tabContainer}>
@@ -92,7 +184,7 @@ export function SocialScreen({ navigation }: any) {
           style={[styles.tab, tab === 'friends' && styles.tabActive]}
           onPress={() => {
             setTab('friends');
-            loadFriends();
+            setSearchQuery('');
           }}
         >
           <Text style={[styles.tabText, tab === 'friends' && styles.tabTextActive]}>Friends</Text>
@@ -101,56 +193,80 @@ export function SocialScreen({ navigation }: any) {
           style={[styles.tab, tab === 'requests' && styles.tabActive]}
           onPress={() => {
             setTab('requests');
-            loadFriends();
+            setSearchQuery('');
           }}
         >
           <Text style={[styles.tabText, tab === 'requests' && styles.tabTextActive]}>Requests</Text>
         </TouchableOpacity>
       </View>
 
-      {friends.length === 0 ? (
+      {searching ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No {tab} yet</Text>
+          <ActivityIndicator size="small" color="#dc2626" />
+        </View>
+      ) : listData.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            {searchQuery.trim() ? 'No users found' : `No ${tab} yet`}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={friends}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.friendItem}>
-              <View style={styles.friendInfo}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>👤</Text>
-                </View>
-                <View style={styles.details}>
-                  <Text style={styles.friendName}>
-                    Friend {item.friendId.slice(0, 8)}
-                  </Text>
-                  {item.tasteMatch && (
-                    <Text style={styles.tasteMatch}>
-                      Taste Match: {item.tasteMatch}%
-                    </Text>
-                  )}
-                </View>
-              </View>
+          data={listData as any[]}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => {
+            const isSearchMode = Boolean(searchQuery.trim() && tab === 'friends');
 
-              {tab === 'friends' ? (
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => navigation.navigate('Messages', { friendId: item.friendId })}
-                >
-                  <Text style={styles.actionBtnText}>Message</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.acceptBtn]}
-                  onPress={() => handleAcceptRequest(item.id)}
-                >
-                  <Text style={styles.actionBtnText}>Accept</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+            return (
+              <View style={styles.friendItem}>
+                <View style={styles.friendInfo}>
+                  {renderAvatar(String(item.name || item.username || 'User'))}
+                  <View style={styles.details}>
+                    <Text style={styles.friendName}>{item.name || item.username || 'User'}</Text>
+                    {isSearchMode ? (
+                      <Text style={styles.subText}>@{item.username}</Text>
+                    ) : tab === 'friends' ? (
+                      <Text style={styles.tasteMatch}>Taste Match: {item.tasteMatch ?? 0}%</Text>
+                    ) : (
+                      <Text style={styles.subText}>@{item.username || 'user'}</Text>
+                    )}
+                  </View>
+                </View>
+
+                {isSearchMode ? (
+                  item.relationStatus === 'none' ? (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, sendingRequestTo === item.id && styles.actionBtnDisabled]}
+                      onPress={() => handleAddFriend(String(item.id))}
+                      disabled={sendingRequestTo === item.id}
+                    >
+                      <Text style={styles.actionBtnText}>
+                        {sendingRequestTo === item.id ? 'Sending...' : 'Add'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.badgeMuted}>
+                      <Text style={styles.badgeMutedText}>{item.relationStatus}</Text>
+                    </View>
+                  )
+                ) : tab === 'friends' ? (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => navigation.navigate('Messages', { friendId: item.id, friendName: item.name })}
+                  >
+                    <Text style={styles.actionBtnText}>Message</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.acceptBtn]}
+                    onPress={() => handleAcceptRequest(String(item.id))}
+                  >
+                    <Text style={styles.actionBtnText}>Accept</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          }}
         />
       )}
     </View>
@@ -225,7 +341,9 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '700',
   },
   details: {
     justifyContent: 'center',
@@ -237,6 +355,11 @@ const styles = StyleSheet.create({
   },
   tasteMatch: {
     color: '#dc2626',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  subText: {
+    color: '#a3a3a3',
     fontSize: 12,
     marginTop: 4,
   },
@@ -253,5 +376,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  actionBtnDisabled: {
+    opacity: 0.6,
+  },
+  badgeMuted: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#444',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  badgeMutedText: {
+    color: '#d4d4d4',
+    fontSize: 11,
+    textTransform: 'capitalize',
   },
 });

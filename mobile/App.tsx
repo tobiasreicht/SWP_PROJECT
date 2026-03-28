@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, Text, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuthStore } from './src/store';
 
 // Screens
@@ -17,31 +18,28 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { MovieDetailScreen } from './src/screens/MovieDetailScreen';
 import { MessagesScreen } from './src/screens/MessagesScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { ActorProfileScreen } from './src/screens/ActorProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function getTabBarIcon(name: string) {
-  const icons: { [key: string]: string } = {
-    Home: '🏠',
-    Explore: '🔍',
-    Watchlist: '🎬',
-    Social: '👥',
-    Dashboard: '📊',
-    Profile: '👤',
+function getTabBarIcon(name: string): React.ComponentProps<typeof MaterialIcons>['name'] {
+  const icons: Record<string, React.ComponentProps<typeof MaterialIcons>['name']> = {
+    Home: 'home',
+    Explore: 'search',
+    Watchlist: 'bookmark-outline',
+    Social: 'groups',
+    Dashboard: 'bar-chart',
+    Profile: 'person-outline',
   };
-  return icons[name] || '•';
+  return icons[name] || 'lens';
 }
 
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size }) => (
-          <Text style={{ fontSize: size * 0.9, color }}>
-            {getTabBarIcon(route.name)}
-          </Text>
-        ),
+        tabBarIcon: ({ color, size }) => <MaterialIcons name={getTabBarIcon(route.name)} size={size} color={color} />,
         tabBarActiveTintColor: '#dc2626',
         tabBarInactiveTintColor: '#666',
         tabBarStyle: {
@@ -166,6 +164,18 @@ function RootStack() {
                 },
                 headerTintColor: '#fff',
                 headerTitle: 'Messages',
+              }}
+            />
+            <Stack.Screen
+              name="ActorProfile"
+              component={ActorProfileScreen}
+              options={{
+                headerShown: true,
+                headerStyle: {
+                  backgroundColor: '#1a1a1a',
+                },
+                headerTintColor: '#fff',
+                headerTitle: 'Actor Profile',
               }}
             />
           </Stack.Group>

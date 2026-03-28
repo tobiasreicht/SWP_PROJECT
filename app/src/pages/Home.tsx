@@ -17,7 +17,7 @@ interface HomeCachePayload {
 }
 
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_PREFIX = 'home-cache-v3';
+const HOME_CACHE_PREFIX = 'home-cache-v4';
 
 const shuffleArray = <T,>(items: T[]): T[] => {
   const copy = [...items];
@@ -36,6 +36,24 @@ const uniqueMovies = (movies: Movie[]): Movie[] => {
     seen.add(key);
     return true;
   });
+};
+
+const withVerifiedTrailer = async (candidates: Movie[], maxChecks = 12): Promise<Movie | null> => {
+  const checked = candidates.slice(0, maxChecks);
+
+  for (const candidate of checked) {
+    try {
+      const id = String(candidate.tmdbId || candidate.id);
+      const detail = await moviesAPI.getById(id);
+      if (detail.data?.trailerUrl) {
+        return detail.data;
+      }
+    } catch {
+      // ignore single candidate failures
+    }
+  }
+
+  return null;
 };
 
 const normalizeMovieResponse = (responseData: any): Movie[] =>
@@ -115,8 +133,9 @@ export const Home: React.FC = () => {
       const page1 = normalizeMovieResponse(page1Res.data);
 
       const heroPool = shuffleArray(
-        uniqueMovies([...trending, ...newReleases]).filter(m => Boolean(m.backdrop || m.poster))
+        uniqueMovies([...trending, ...newReleases, ...page1]).filter(m => Boolean(m.backdrop || m.poster))
       );
+      const heroMovie = await withVerifiedTrailer(heroPool, 15);
 
       const rows: HomeRow[] = [
         { title: 'Trending Now', movies: shuffleArray(trending) },
@@ -124,7 +143,7 @@ export const Home: React.FC = () => {
         { title: 'Popular Movies', movies: uniqueMovies(page1) },
       ].filter(row => row.movies.length > 0);
 
-      return { heroMovie: heroPool[0] || null, homeRows: rows, trending, newReleases, page1 };
+      return { heroMovie, homeRows: rows, trending, newReleases, page1 };
     };
 
     const fetchExtra = async (existing: Movie[]) => {

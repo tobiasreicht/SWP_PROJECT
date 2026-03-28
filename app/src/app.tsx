@@ -11,6 +11,7 @@ const Social = lazy(() => import('./pages/Social').then(m => ({ default: m.Socia
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
+const ActorProfile = lazy(() => import('./pages/ActorProfile').then(m => ({ default: m.ActorProfile })));
 
 const PageFallback = () => (
   <div className="min-h-screen bg-neutral-900 flex items-center justify-center">
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/social" element={<Social />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/actors/:actorId" element={<ActorProfile />} />
             <Route path="/auth" element={<Auth />} />
           </Routes>
         </Suspense>

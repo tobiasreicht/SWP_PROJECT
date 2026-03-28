@@ -54,8 +54,13 @@ export const moviesAPI = {
   getAll: (page = 1, limit = 20) =>
     apiClient.get('/movies', { params: { page, limit } }),
   getById: (id: string) => apiClient.get(`/movies/${id}`),
+  getCast: (id: string, limit = 20) => apiClient.get(`/movies/${id}/cast`, { params: { limit } }),
   search: (query: string) =>
     apiClient.get('/movies/search', { params: { q: query } }),
+  searchActors: (query: string) =>
+    apiClient.get('/movies/actors/search', { params: { q: query } }),
+  getActorProfile: (actorId: string) =>
+    apiClient.get(`/movies/actors/${actorId}`),
   getByGenre: (genre: string) =>
     apiClient.get(`/movies/genre/${genre}`),
   getTrending: () => apiClient.get('/movies/trending'),
