@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Star, Plus, Check, Share2, Heart, ExternalLink } from 'lucide-react';
-import { Movie, Actor, Rating } from '../../types';
+import { Movie, Actor } from '../../types';
 import { Modal, Button, Badge } from '../ui';
 import { useMessengerStore, useRatingStore, useWatchlistStore } from '../../store';
 import { moviesAPI } from '../../services/tmdb';
@@ -19,11 +19,9 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate();
-  const { createRating } = useRatingStore();
+  const { ratings, fetchUserRatings } = useRatingStore();
   const { items: watchlistItems, fetchWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlistStore();
   const { openMessenger } = useMessengerStore();
-  const [selectedRating, setSelectedRating] = useState<number | null>(null);
-  const [reviewText, setReviewText] = useState('');
   const [platforms, setPlatforms] = useState(movie?.streamingPlatforms || []);
   const [loadingPlatforms, setLoadingPlatforms] = useState(false);
   const [castActors, setCastActors] = useState<Actor[]>([]);
@@ -45,17 +43,33 @@ export const MovieModal: React.FC<MovieModalProps> = ({
     : undefined;
 
   const isInWatchlist = Boolean(matchedWatchlistItem);
+  const userRating = movie
+    ? ratings.find((rating) => {
+        if (rating.movieId === movie.id) {
+          return true;
+        }
+
+        if (matchedWatchlistItem && rating.movieId === matchedWatchlistItem.movieId) {
+          return true;
+        }
+
+        if (movie.tmdbId && rating.movieId === String(movie.tmdbId)) {
+          return true;
+        }
+
+        return false;
+      })
+    : undefined;
   const posterUrl = resolvePosterUrl(movie?.poster || '');
   const posterFallback = getPosterFallbackUrl();
 
   useEffect(() => {
     if (!isOpen) {
-      setSelectedRating(null);
-      setReviewText('');
       return;
     }
 
     fetchWatchlist();
+    fetchUserRatings();
   }, [isOpen]);
 
   useEffect(() => {
@@ -72,7 +86,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
         setLoadingPlatforms(true);
         try {
           const id = String((movie as any).tmdbId || movie.id);
-          const resp = await moviesAPI.getById(id);
+          const resp = await moviesAPI.getById(id, 'movie');
           if (!mounted) return;
           setPlatforms(resp.data.streamingPlatforms || []);
         } catch (e) {
@@ -98,7 +112,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
       setLoadingCast(true);
       try {
         const id = String((movie as any).tmdbId || movie.id);
-        const resp = await moviesAPI.getCast(id, 20);
+        const resp = await moviesAPI.getCast(id, 20, 'movie');
         if (!mounted) {
           return;
         }
@@ -121,13 +135,6 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   }, [isOpen, movie]);
 
   if (!movie) return null;
-
-  const handleSubmitRating = async () => {
-    if (selectedRating) {
-      await createRating(movie.id, selectedRating, reviewText);
-      onClose();
-    }
-  };
 
   const handleToggleWatchlist = async () => {
     if (matchedWatchlistItem) {
@@ -280,43 +287,29 @@ export const MovieModal: React.FC<MovieModalProps> = ({
                 <p className="text-gray-400">No cast data available.</p>
               )}
             </div>
-            {/* Rating Section */}
+            {/* Official Ratings */}
             <div className="border-t border-white/10 pt-6">
-              <p className="text-white font-semibold mb-3 text-lg">Your Rating</p>
-              <div className="flex gap-2 mb-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => setSelectedRating(num)}
-                    className={`w-10 h-10 rounded-lg font-semibold transition-colors shadow ${
-                      selectedRating === num
-                        ? 'bg-red-600 text-white'
-                        : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
+              <p className="text-white font-semibold mb-3 text-lg">Official Ratings</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">TMDB</p>
+                  <div className="flex items-center gap-2">
+                    <Star size={15} className="fill-yellow-400 text-yellow-400" />
+                    <span className="text-white font-semibold">{movie.rating.toFixed(1)}/10</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Your Rating</p>
+                  {userRating ? (
+                    <p className="text-sm text-yellow-300 font-semibold">★ {userRating.rating}/10</p>
+                  ) : (
+                    <p className="text-sm text-gray-300">Set personal ratings in Watchlist.</p>
+                  )}
+                </div>
               </div>
-              {/* Review */}
-              <textarea
-                value={reviewText}
-                onChange={(e) => setReviewText(e.target.value)}
-                placeholder="Write your review (optional)..."
-                className="w-full px-3 py-2 rounded-xl bg-white/20 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-red-600 resize-none shadow"
-                rows={3}
-              />
             </div>
             {/* Actions */}
             <div className="flex gap-3 flex-wrap mt-2">
-              <Button
-                variant="primary"
-                onClick={handleSubmitRating}
-                className="flex-1"
-                disabled={!selectedRating}
-              >
-                Save Rating
-              </Button>
               <Button
                 variant="secondary"
                 onClick={handleToggleWatchlist}

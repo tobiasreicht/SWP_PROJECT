@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Play } from 'lucide-react';
-import { MovieRow, MovieModal } from '../components/movie';
+import { MovieRow, ContentModal } from '../components/movie';
 import { Movie } from '../types';
 import { moviesAPI } from '../services/tmdb';
 import { useWatchlistStore } from '../store';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../utils/media';
 
 interface HomeRow {
   title: string;
@@ -17,7 +18,7 @@ interface HomeCachePayload {
 }
 
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-const HOME_CACHE_PREFIX = 'home-cache-v5';
+const HOME_CACHE_PREFIX = 'home-cache-v6';
 const RECENT_RELEASE_WINDOW_DAYS = 60;
 
 const shuffleArray = <T,>(items: T[]): T[] => {
@@ -84,7 +85,7 @@ const withVerifiedTrailer = async (candidates: Movie[], maxChecks = 12): Promise
   for (const candidate of checked) {
     try {
       const id = String(candidate.tmdbId || candidate.id);
-      const detail = await moviesAPI.getById(id);
+      const detail = await moviesAPI.getById(id, candidate.type);
       if (detail.data?.trailerUrl) {
         return detail.data;
       }
@@ -152,9 +153,11 @@ export const Home: React.FC = () => {
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [heroMovie, setHeroMovie] = useState<Movie | null>(null);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
   const [homeRows, setHomeRows] = useState<HomeRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const posterFallback = getPosterFallbackUrl();
 
   useEffect(() => {
     let cancelled = false;
@@ -184,7 +187,7 @@ export const Home: React.FC = () => {
 
       const rows: HomeRow[] = [
         { title: 'Trending Now', movies: shuffleArray(trending) },
-        { title: 'New Releases (Last 60 Days)', movies: shuffleArray(robustNewReleases) },
+        { title: 'New Releases ', movies: shuffleArray(robustNewReleases) },
         { title: 'Upcoming This Year', movies: robustUpcomingThisYear },
         { title: 'Popular Movies', movies: uniqueMovies(page1) },
       ];
@@ -270,10 +273,20 @@ export const Home: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    setHeroImageFailed(false);
+  }, [heroMovie?.id, heroMovie?.backdrop, heroMovie?.poster]);
+
   const handleMovieSelect = (movie: Movie) => {
     setSelectedMovie(movie);
     setIsModalOpen(true);
   };
+
+  const heroBackdropUrl = heroMovie
+    ? resolvePosterUrl(heroMovie.backdrop || heroMovie.poster || '')
+    : posterFallback;
+
+  const showHeroBackdrop = heroMovie && !heroMovie?.trailerUrl && !heroImageFailed;
 
   return (
     <div className="w-full">
@@ -290,11 +303,18 @@ export const Home: React.FC = () => {
             />
             <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 via-neutral-900/60 to-transparent" />
           </div>
-        ) : heroMovie?.backdrop ? (
+        ) : showHeroBackdrop ? (
           <div
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url('${heroMovie.backdrop}')` }}
+            style={{ backgroundImage: `url('${heroBackdropUrl}')` }}
           >
+            <img
+              src={heroBackdropUrl}
+              alt=""
+              aria-hidden="true"
+              className="hidden"
+              onError={() => setHeroImageFailed(true)}
+            />
             <div className="absolute inset-0 bg-gradient-to-r from-neutral-900 via-neutral-900/60 to-transparent" />
           </div>
         ) : (
@@ -360,7 +380,7 @@ export const Home: React.FC = () => {
         )}
       </div>
 
-      <MovieModal
+      <ContentModal
         movie={selectedMovie}
         isOpen={isModalOpen}
         onClose={() => {

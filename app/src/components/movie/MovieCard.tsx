@@ -3,7 +3,7 @@ import { Star, Plus, Play, Check, Share2 } from 'lucide-react';
 import { Movie } from '../../types';
 import { Card, Badge } from '../ui';
 import { useMessengerStore, useWatchlistStore } from '../../store';
-import { resolvePosterUrl } from '../../utils/media';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../../utils/media';
 
 interface MovieCardProps {
   movie: Movie;
@@ -49,6 +49,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
   };
 
   const posterUrl = resolvePosterUrl(movie.poster);
+  const posterFallback = getPosterFallbackUrl();
 
   return (
     <Card
@@ -65,6 +66,9 @@ export const MovieCard: React.FC<MovieCardProps> = ({
         loading="lazy"
         decoding="async"
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 bg-gray-800"
+        onError={(event) => {
+          event.currentTarget.src = posterFallback;
+        }}
       />
 
       {/* Overlay */}
@@ -88,7 +92,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({
             <span>{movie.releaseDate.toString().split('T')[0]}</span>
             <span>•</span>
             <span className="capitalize">
-              {movie.type === 'movie' ? 'Film' : 'Serie'}
+              {movie.type === 'movie' ? 'Film' : 'Series'}
             </span>
           </div>
 
@@ -164,9 +168,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({
       )}
 
       {/* Type Badge (top-right) */}
-      <div className="absolute top-2 right-2 z-20">
-        <Badge variant="default" className="text-xs">
-          {movie.type === 'movie' ? 'Film' : 'Serie'}
+      <div className="absolute top-2 right-2 z-20 flex flex-col items-end gap-1.5">
+        <Badge
+          variant="default"
+          className={`text-xs ${movie.type === 'series' ? 'bg-blue-500/70 text-sky-200' : ''}`}
+        >
+          {movie.type === 'movie' ? 'Film' : 'Series'}
         </Badge>
       </div>
 
@@ -179,7 +186,6 @@ export const MovieCard: React.FC<MovieCardProps> = ({
           <p className="text-xs text-gray-400 mt-1">
             {movie.genres && movie.genres[0]} • {movie.releaseDate ? movie.releaseDate.toString().split('T')[0] : ''}
           </p>
-
           {/* streaming platforms intentionally omitted here; see extended view */}
         </div>
       )}

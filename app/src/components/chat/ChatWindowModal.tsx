@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { MessageCircle, Send, Search, X } from 'lucide-react';
-import { MovieModal } from '../movie';
+import { ContentModal } from '../movie';
 import { Modal, Button } from '../ui';
 import { friendsAPI, messagesAPI } from '../../services/api';
 import { moviesAPI } from '../../services/tmdb';
@@ -376,7 +376,7 @@ export const ChatWindowModal: React.FC = () => {
         </div>
       </Modal>
 
-      <MovieModal
+      <ContentModal
         movie={selectedMovie}
         isOpen={isMovieModalOpen}
         onClose={() => {

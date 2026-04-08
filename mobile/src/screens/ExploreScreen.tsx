@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Actor, Movie } from '../types';
 import { moviesAPI } from '../services/api';
+import { getPosterFallbackUrl, resolvePosterUrl } from '../utils/media';
 
 const FALLBACK_ACTOR = 'https://placehold.co/200x300/1f2937/e5e7eb?text=Actor';
 
@@ -10,6 +11,7 @@ export function ExploreScreen({ navigation }: any) {
   const [results, setResults] = useState<Movie[]>([]);
   const [actorResults, setActorResults] = useState<Actor[]>([]);
   const [loading, setLoading] = useState(false);
+  const posterFallback = getPosterFallbackUrl();
 
   const handleSearch = async (query: string) => {
     setSearch(query);
@@ -36,9 +38,14 @@ export function ExploreScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.heroHeader}>
+        <Text style={styles.heroEyebrow}>Explore</Text>
+        <Text style={styles.heroTitle}>Find your next watch</Text>
+      </View>
+
       <TextInput
         style={styles.searchInput}
-        placeholder="Search movies or actors..."
+        placeholder="Search movies, series or actors..."
         placeholderTextColor="#666"
         value={search}
         onChangeText={handleSearch}
@@ -51,7 +58,7 @@ export function ExploreScreen({ navigation }: any) {
       ) : results.length === 0 && actorResults.length === 0 ? (
         <View style={styles.centerContent}>
           <Text style={styles.emptyText}>
-            {search ? 'No movies or actors found' : 'Search for movies or actors'}
+            {search ? 'No titles or actors found' : 'Search for movies, series or actors'}
           </Text>
         </View>
       ) : (
@@ -86,11 +93,11 @@ export function ExploreScreen({ navigation }: any) {
                   />
                 </View>
               )}
-              <Text style={styles.sectionTitle}>Movies</Text>
+              <Text style={styles.sectionTitle}>Titles</Text>
             </View>
           }
           ListEmptyComponent={
-            <Text style={styles.emptyMoviesText}>No movie results for this search.</Text>
+            <Text style={styles.emptyMoviesText}>No title results for this search.</Text>
           }
           renderItem={({ item }) => (
             <TouchableOpacity
@@ -98,12 +105,12 @@ export function ExploreScreen({ navigation }: any) {
               onPress={() => navigation.navigate('MovieDetail', { movie: item })}
             >
               <Image
-                source={{ uri: item.poster }}
+                source={{ uri: resolvePosterUrl(item.poster) || posterFallback }}
                 style={styles.moviePoster}
               />
               <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
               <Text style={styles.movieYear}>
-                {new Date(item.releaseDate).getFullYear()}
+                {new Date(item.releaseDate).getFullYear()} • {item.type === 'series' ? 'Series' : 'Film'}
               </Text>
             </TouchableOpacity>
           )}
@@ -116,17 +123,33 @@ export function ExploreScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    padding: 15,
+    backgroundColor: '#0d0f14',
+    padding: 14,
+  },
+  heroHeader: {
+    marginBottom: 10,
+  },
+  heroEyebrow: {
+    color: '#fda4af',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    marginTop: 6,
   },
   searchInput: {
-    backgroundColor: '#202020',
-    borderColor: '#3b3b3b',
+    backgroundColor: '#161b26',
+    borderColor: '#2d3446',
     borderWidth: 1,
     color: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
+    padding: 13,
+    borderRadius: 14,
+    marginBottom: 16,
   },
   centerContent: {
     flex: 1,
@@ -134,8 +157,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#999',
-    fontSize: 16,
+    color: '#9ca3af',
+    fontSize: 15,
   },
   resultsListContent: {
     paddingBottom: 16,
@@ -145,7 +168,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     marginBottom: 10,
   },
@@ -158,8 +181,8 @@ const styles = StyleSheet.create({
   actorCard: {
     width: 132,
     marginRight: 12,
-    backgroundColor: '#222222',
-    borderColor: '#343434',
+    backgroundColor: '#131722',
+    borderColor: '#283042',
     borderWidth: 1,
     borderRadius: 14,
     padding: 9,
@@ -177,12 +200,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   actorMeta: {
-    color: '#a3a3a3',
+    color: '#9ca3af',
     fontSize: 11,
     marginTop: 3,
   },
   emptyMoviesText: {
-    color: '#8d8d8d',
+    color: '#8f94a3',
     fontSize: 13,
     marginBottom: 16,
   },
@@ -195,18 +218,18 @@ const styles = StyleSheet.create({
   },
   moviePoster: {
     width: '100%',
-    height: 200,
-    borderRadius: 8,
-    backgroundColor: '#2a2a2a',
+    height: 206,
+    borderRadius: 12,
+    backgroundColor: '#1f2532',
   },
   movieTitle: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 8,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   movieYear: {
-    color: '#999',
+    color: '#9ca3af',
     fontSize: 11,
     marginTop: 4,
   },

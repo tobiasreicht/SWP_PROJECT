@@ -10,15 +10,15 @@ import { useAuthStore } from './src/store';
 // Screens
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
-import { HomeScreen } from './src/screens/HomeScreen';
 import { ExploreScreen } from './src/screens/ExploreScreen';
 import { WatchlistScreen } from './src/screens/WatchlistScreen';
 import { SocialScreen } from './src/screens/SocialScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
-import { MovieDetailScreen } from './src/screens/MovieDetailScreen';
 import { MessagesScreen } from './src/screens/MessagesScreen';
-import { DashboardScreen } from './src/screens/DashboardScreen';
 import { ActorProfileScreen } from './src/screens/ActorProfileScreen';
+
+const HomeScreen = require('./src/screens/HomeScreen').HomeScreen;
+const MovieDetailScreen = require('./src/screens/MovieDetailScreen').default;
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -29,7 +29,6 @@ function getTabBarIcon(name: string): React.ComponentProps<typeof MaterialIcons>
     Explore: 'search',
     Watchlist: 'bookmark-outline',
     Social: 'groups',
-    Dashboard: 'bar-chart',
     Profile: 'person-outline',
   };
   return icons[name] || 'lens';
@@ -40,53 +39,61 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => <MaterialIcons name={getTabBarIcon(route.name)} size={size} color={color} />,
-        tabBarActiveTintColor: '#dc2626',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: '#ef4444',
+        tabBarInactiveTintColor: '#71717a',
         tabBarStyle: {
-          backgroundColor: '#1a1a1a',
-          borderTopColor: '#2a2a2a',
+          backgroundColor: '#11131a',
+          borderTopColor: '#2a3040',
           borderTopWidth: 1,
+          height: 66,
+          paddingBottom: 8,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
         },
         headerShown: true,
         headerStyle: {
-          backgroundColor: '#1a1a1a',
+          backgroundColor: '#11131a',
         },
         headerTintColor: '#fff',
         headerTitleStyle: {
-          fontWeight: 'bold',
+          fontWeight: '700',
           color: '#fff',
+        },
+        sceneStyle: {
+          backgroundColor: '#0d0f14',
         },
       })}
     >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{ title: 'Watch Together' }}
+        options={{
+          title: 'Home',
+          headerShown: false,
+        }}
       />
       <Tab.Screen
         name="Explore"
         component={ExploreScreen}
-        options={{ title: 'Explore' }}
+        options={{ title: 'Explore', headerTitle: 'Explore' }}
       />
       <Tab.Screen
         name="Watchlist"
         component={WatchlistScreen}
-        options={{ title: 'My Watchlist' }}
+        options={{ title: 'Watchlist', headerTitle: 'Watchlist' }}
       />
       <Tab.Screen
         name="Social"
         component={SocialScreen}
-        options={{ title: 'Friends' }}
-      />
-      <Tab.Screen
-        name="Dashboard"
-        component={DashboardScreen}
-        options={{ title: 'Dashboard' }}
+        options={{ title: 'Friends', headerTitle: 'Social' }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: 'Profile' }}
+        options={{ title: 'Profile', headerTitle: 'Profile' }}
       />
     </Tab.Navigator>
   );
@@ -127,7 +134,7 @@ function RootStack() {
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a1a' }}>
-        <ActivityIndicator size="large" color="#dc2626" />
+        <ActivityIndicator size="large" color="#ef4444" />
       </View>
     );
   }
@@ -148,7 +155,7 @@ function RootStack() {
               options={{
                 headerShown: true,
                 headerStyle: {
-                  backgroundColor: '#1a1a1a',
+                  backgroundColor: '#11131a',
                 },
                 headerTintColor: '#fff',
                 headerTitle: 'Movie Details',
@@ -160,7 +167,7 @@ function RootStack() {
               options={{
                 headerShown: true,
                 headerStyle: {
-                  backgroundColor: '#1a1a1a',
+                  backgroundColor: '#11131a',
                 },
                 headerTintColor: '#fff',
                 headerTitle: 'Messages',
@@ -172,7 +179,7 @@ function RootStack() {
               options={{
                 headerShown: true,
                 headerStyle: {
-                  backgroundColor: '#1a1a1a',
+                  backgroundColor: '#11131a',
                 },
                 headerTintColor: '#fff',
                 headerTitle: 'Actor Profile',

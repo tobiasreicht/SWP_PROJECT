@@ -5,7 +5,7 @@
  */
 
 import { moviesAPI as backendMoviesAPI } from './api';
-import type { Actor, ActorProfile, Movie, StreamingPlatform } from '../types';
+import type { Actor, ActorProfile, Movie, SeriesEpisode, SeriesSeasonSummary, StreamingPlatform } from '../types';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
@@ -126,7 +126,36 @@ function mapItem(item: any, forcedType?: 'movie' | 'tv'): Movie {
     rating: item.vote_average ?? 0,
     trailerUrl: item._trailerUrl ?? null,
     streamingPlatforms: item._platforms ?? [],
+    seasonCount: item.number_of_seasons,
+    episodeCount: item.number_of_episodes,
+    seriesStatus: item.status,
+    seasons: Array.isArray(item.seasons)
+      ? item.seasons
+          .filter((season: any) => typeof season.season_number === 'number' && season.season_number >= 0)
+          .map((season: any): SeriesSeasonSummary => ({
+            id: season.id,
+            seasonNumber: season.season_number,
+            name: season.name || `Season ${season.season_number}`,
+            episodeCount: season.episode_count ?? 0,
+            airDate: season.air_date ?? null,
+            poster: season.poster_path ? `${TMDB_IMG}/w500${season.poster_path}` : undefined,
+            overview: season.overview ?? undefined,
+          }))
+      : undefined,
   };
+}
+
+function mapSeasonEpisodes(rawSeason: any): SeriesEpisode[] {
+  const episodes = Array.isArray(rawSeason?.episodes) ? rawSeason.episodes : [];
+  return episodes.map((episode: any) => ({
+    id: episode.id,
+    episodeNumber: episode.episode_number,
+    name: episode.name || `Episode ${episode.episode_number}`,
+    runtime: episode.runtime ?? undefined,
+    airDate: episode.air_date ?? null,
+    overview: episode.overview ?? undefined,
+    stillPath: episode.still_path ? `${TMDB_IMG}/w500${episode.still_path}` : undefined,
+  }));
 }
 
 function mapActor(item: any): Actor {
@@ -271,17 +300,29 @@ export const moviesAPI = {
     return { data: results.map(mapActor) };
   },
 
-  getCast: async (id: string, limit = 20): Promise<{ data: Actor[] }> => {
+  getCast: async (id: string, limit = 20, type?: 'movie' | 'series'): Promise<{ data: Actor[] }> => {
     if (!shouldUseDirectTMDB()) {
-      const response = await backendMoviesAPI.getCast(id, limit);
+      const response = await backendMoviesAPI.getCast(id, limit, type);
       return { data: response.data };
     }
 
     let credits: any;
-    try {
-      credits = await tmdbFetch<any>(`/movie/${id}/credits`);
-    } catch {
-      credits = await tmdbFetch<any>(`/tv/${id}/credits`);
+    const preferredMediaPath = type === 'series' ? 'tv' : type === 'movie' ? 'movie' : undefined;
+    const tryPaths: Array<'movie' | 'tv'> = preferredMediaPath
+      ? [preferredMediaPath, preferredMediaPath === 'movie' ? 'tv' : 'movie']
+      : (['movie', 'tv'] as const);
+
+    for (const path of tryPaths) {
+      try {
+        credits = await tmdbFetch<any>(`/${path}/${id}/credits`);
+        break;
+      } catch {
+        // try fallback path
+      }
+    }
+
+    if (!credits) {
+      throw new Error(`TMDB cast lookup failed for ${id}`);
     }
 
     const cast = Array.isArray(credits.cast) ? credits.cast : [];
@@ -325,20 +366,32 @@ export const moviesAPI = {
   },
 
   /** Single movie/TV details with cast, trailer, and streaming providers */
-  getById: async (id: string): Promise<{ data: Movie }> => {
+  getById: async (id: string, type?: 'movie' | 'series'): Promise<{ data: Movie }> => {
     if (!shouldUseDirectTMDB()) {
-      const response = await backendMoviesAPI.getById(id);
+      const response = await backendMoviesAPI.getById(id, type);
       return { data: response.data };
     }
 
-    // Try movie first, fall back to TV
+    // Try preferred media type first, then fall back
     let rawItem: any;
-    let mediaType: 'movie' | 'tv' = 'movie';
-    try {
-      rawItem = await tmdbFetch<any>(`/movie/${id}`, { append_to_response: 'credits,videos,watch/providers' });
-    } catch {
-      rawItem = await tmdbFetch<any>(`/tv/${id}`, { append_to_response: 'credits,videos,watch/providers' });
-      mediaType = 'tv';
+    let mediaType: 'movie' | 'tv' = type === 'series' ? 'tv' : 'movie';
+    const preferredMediaPath = type === 'series' ? 'tv' : type === 'movie' ? 'movie' : undefined;
+    const tryPaths: Array<'movie' | 'tv'> = preferredMediaPath
+      ? [preferredMediaPath, preferredMediaPath === 'movie' ? 'tv' : 'movie']
+      : (['movie', 'tv'] as const);
+
+    for (const path of tryPaths) {
+      try {
+        rawItem = await tmdbFetch<any>(`/${path}/${id}`, { append_to_response: 'credits,videos,watch/providers' });
+        mediaType = path;
+        break;
+      } catch {
+        // try fallback path
+      }
+    }
+
+    if (!rawItem) {
+      throw new Error(`TMDB detail lookup failed for ${id}`);
     }
 
     // Director / creator
@@ -394,5 +447,15 @@ export const moviesAPI = {
     rawItem._platforms = streamingPlatforms;
 
     return { data: mapItem(rawItem, mediaType) };
+  },
+
+  getSeriesSeason: async (id: string, seasonNumber: number): Promise<{ data: SeriesEpisode[] }> => {
+    if (!shouldUseDirectTMDB()) {
+      const response = await backendMoviesAPI.getSeriesSeason(id, seasonNumber);
+      return { data: response.data };
+    }
+
+    const season = await tmdbFetch<any>(`/tv/${id}/season/${seasonNumber}`);
+    return { data: mapSeasonEpisodes(season) };
   },
 };

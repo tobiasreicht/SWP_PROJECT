@@ -171,6 +171,11 @@ export function SocialScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.heroHeader}>
+        <Text style={styles.heroEyebrow}>Social</Text>
+        <Text style={styles.heroTitle}>Friends & Requests</Text>
+      </View>
+
       <TextInput
         style={styles.searchInput}
         placeholder="Search users to add..."
@@ -276,21 +281,40 @@ export function SocialScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0d0f14',
+  },
+  heroHeader: {
+    paddingHorizontal: 15,
+    paddingTop: 14,
+  },
+  heroEyebrow: {
+    color: '#fda4af',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    marginTop: 6,
   },
   searchInput: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#444',
+    backgroundColor: '#161b26',
+    borderColor: '#2d3446',
     borderWidth: 1,
     color: '#fff',
     padding: 12,
     margin: 15,
-    borderRadius: 8,
+    marginTop: 10,
+    borderRadius: 12,
   },
   tabContainer: {
     flexDirection: 'row',
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: '#242a3a',
     borderBottomWidth: 1,
+    marginHorizontal: 15,
   },
   tab: {
     flex: 1,
@@ -298,7 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: {
-    borderBottomColor: '#dc2626',
+    borderBottomColor: '#ef4444',
     borderBottomWidth: 2,
   },
   tabText: {
@@ -307,7 +331,7 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   emptyContainer: {
     flex: 1,
@@ -322,10 +346,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    marginHorizontal: 15,
+    marginTop: 10,
+    borderRadius: 12,
+    borderColor: '#262d3d',
+    borderWidth: 1,
+    backgroundColor: '#131722',
+    paddingHorizontal: 12,
     paddingVertical: 12,
-    borderBottomColor: '#2a2a2a',
-    borderBottomWidth: 1,
   },
   friendInfo: {
     flexDirection: 'row',
@@ -335,7 +363,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#dc2626',
+    backgroundColor: '#ef4444',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -354,7 +382,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tasteMatch: {
-    color: '#dc2626',
+    color: '#f87171',
     fontSize: 12,
     marginTop: 4,
   },
@@ -364,10 +392,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actionBtn: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#ef4444',
     paddingHorizontal: 15,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   acceptBtn: {
     backgroundColor: '#059669',
@@ -381,8 +409,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   badgeMuted: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#444',
+    backgroundColor: '#1a1f2c',
+    borderColor: '#2d3446',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,

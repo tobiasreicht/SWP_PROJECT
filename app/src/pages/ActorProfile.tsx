@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Calendar, Film, MapPin, Search } from 'lucide-react';
 
-import { MovieModal } from '../components/movie';
+import { ContentModal } from '../components/movie';
 import { moviesAPI } from '../services/tmdb';
 import { ActorProfile as ActorProfileType, Movie } from '../types';
 import { getPosterFallbackUrl, resolvePosterUrl } from '../utils/media';
@@ -258,7 +258,7 @@ export const ActorProfile: React.FC = () => {
         )}
       </div>
 
-      <MovieModal
+      <ContentModal
         movie={selectedMovie}
         isOpen={isMovieModalOpen}
         onClose={() => {

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MovieCard, MovieModal } from '../components/movie';
+import { MovieCard, ContentModal } from '../components/movie';
 import { Actor, Movie } from '../types';
 import { moviesAPI } from '../services/tmdb';
 import { useWatchlistStore } from '../store';
@@ -96,7 +96,7 @@ export const Explore: React.FC = () => {
         {/* Page header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white tracking-tight">Explore</h1>
-          <p className="text-gray-400 mt-1 text-sm">Search movies and actors or browse by genre</p>
+          <p className="text-gray-400 mt-1 text-sm">Search movies, series and actors or browse by genre</p>
         </div>
 
         {/* Search */}
@@ -141,7 +141,7 @@ export const Explore: React.FC = () => {
         {(searchQuery || selectedGenre) && !isLoading && (
           <p className="text-gray-400 text-sm mb-4">
             {searchQuery
-              ? `${movies.length} movies and ${actors.length} actors for "${searchQuery}"`
+              ? `${movies.length} titles and ${actors.length} actors for "${searchQuery}"`
               : `${movies.length} results in ${selectedGenre}`}
           </p>
         )}
@@ -217,7 +217,7 @@ export const Explore: React.FC = () => {
         )}
       </div>
 
-      <MovieModal
+      <ContentModal
         movie={selectedMovie}
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setSelectedMovie(null); }}

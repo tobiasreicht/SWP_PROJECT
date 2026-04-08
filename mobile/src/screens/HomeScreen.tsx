@@ -1,9 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Image, TouchableOpacity, FlatList } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  FlatList,
+} from 'react-native';
 import { Movie } from '../types';
-import { moviesAPI, recommendationsAPI, watchlistAPI } from '../services/api';
+import { moviesAPI, recommendationsAPI } from '../services/api';
+import { getPosterFallbackUrl, resolveBackdropUrl, resolvePosterUrl } from '../utils/media';
 
 const RECENT_RELEASE_WINDOW_DAYS = 60;
+
+type HomeRow = {
+  key: string;
+  title: string;
+  subtitle: string;
+  data: Movie[];
+};
 
 const parseMovieDate = (value: Date | string | null | undefined): Date | null => {
   if (!value) return null;
@@ -18,6 +35,16 @@ const formatReleaseDate = (value: Date | string | null | undefined): string => {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+  });
+};
+
+const uniqueMovies = (movies: Movie[]): Movie[] => {
+  const seen = new Set<string>();
+  return movies.filter((movie) => {
+    const key = `${movie.id}-${movie.tmdbId || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 };
 
@@ -54,199 +81,222 @@ const splitReleaseBuckets = (movies: Movie[]) => {
   return { released, upcomingThisYear };
 };
 
-const uniqueMovies = (movies: Movie[]): Movie[] => {
-  const seen = new Set<string>();
-  return movies.filter((movie) => {
-    const key = `${movie.id}-${movie.tmdbId || ''}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+const getBadgeText = (movie: Movie): string => {
+  if (movie.type === 'series') {
+    return movie.seasonCount ? `${movie.seasonCount} seasons` : 'Series';
+  }
+  return 'Movie';
 };
 
+const mapResponseMovies = (value: any): Movie[] => (Array.isArray(value) ? value : []);
+
 export function HomeScreen({ navigation }: any) {
-  const [trending, setTrending] = useState<Movie[]>([]);
-  const [newReleases, setNewReleases] = useState<Movie[]>([]);
-  const [upcomingThisYear, setUpcomingThisYear] = useState<Movie[]>([]);
-  const [recommended, setRecommended] = useState<Movie[]>([]);
-  const [watchlistCount, setWatchlistCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<HomeRow[]>([]);
+  const [featured, setFeatured] = useState<Movie | null>(null);
+  const posterFallback = getPosterFallbackUrl();
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [trendingRes, newRes, allPage1Res, allPage2Res, recRes, watchlistRes] = await Promise.all([
+      const [trendingRes, newRes, page1Res, page2Res, page3Res, recRes] = await Promise.all([
         moviesAPI.getTrending(),
         moviesAPI.getNewReleases(),
         moviesAPI.getAll(1, 20),
         moviesAPI.getAll(2, 20),
-        recommendationsAPI.getPersonal(10),
-        watchlistAPI.getCount(),
+        moviesAPI.getAll(3, 20),
+        recommendationsAPI.getPersonal(16),
       ]);
-      const trendingMovies = Array.isArray(trendingRes.data) ? trendingRes.data : [];
-      const incomingReleases = Array.isArray(newRes.data) ? newRes.data : [];
-      const page1Movies = Array.isArray(allPage1Res.data) ? allPage1Res.data : [];
-      const page2Movies = Array.isArray(allPage2Res.data) ? allPage2Res.data : [];
-      const releaseCandidates = uniqueMovies([
-        ...incomingReleases,
-        ...page1Movies,
-        ...page2Movies,
-        ...trendingMovies,
-      ]);
-      const { released, upcomingThisYear: upcoming } = splitReleaseBuckets(releaseCandidates);
-      setTrending(trendingMovies);
-      setNewReleases(released);
-      setUpcomingThisYear(upcoming);
 
-      const recommendedMovies = Array.isArray(recRes.data)
+      const trending = mapResponseMovies(trendingRes.data);
+      const incomingReleases = mapResponseMovies(newRes.data);
+      const page1 = mapResponseMovies(page1Res.data);
+      const page2 = mapResponseMovies(page2Res.data);
+      const page3 = mapResponseMovies(page3Res.data);
+      const recommended = Array.isArray(recRes.data)
         ? recRes.data
             .map((entry: { movie?: Movie }) => entry.movie)
             .filter((movie): movie is Movie => Boolean(movie))
         : [];
-      setRecommended(recommendedMovies);
-      setWatchlistCount((watchlistRes.data?.count as number | undefined) ?? (watchlistRes.data?.total as number | undefined) ?? 0);
+
+      const releaseCandidates = uniqueMovies([
+        ...incomingReleases,
+        ...page1,
+        ...page2,
+        ...trending,
+      ]);
+      const { released, upcomingThisYear } = splitReleaseBuckets(releaseCandidates);
+
+      const featuredCandidate =
+        trending.find((item) => item.backdrop || item.poster) ||
+        recommended.find((item) => item.backdrop || item.poster) ||
+        released.find((item) => item.backdrop || item.poster) ||
+        null;
+      setFeatured(featuredCandidate);
+
+      const primaryPool = uniqueMovies([...trending, ...page1, ...incomingReleases]);
+      const hiddenGems = uniqueMovies(page2).filter(
+        (movie) => !primaryPool.some((primary) => primary.id === movie.id && primary.tmdbId === movie.tmdbId)
+      );
+
+      const nextRows: HomeRow[] = [
+        {
+          key: 'trending',
+          title: 'Trending Now',
+          subtitle: 'Most watched right now',
+          data: trending.slice(0, 18),
+        },
+        {
+          key: 'fresh',
+          title: 'Fresh Releases',
+          subtitle: 'Released in the last 60 days',
+          data: released.slice(0, 18),
+        },
+        {
+          key: 'upcoming',
+          title: 'Coming This Year',
+          subtitle: 'Upcoming movies and series',
+          data: upcomingThisYear.slice(0, 18),
+        },
+        {
+          key: 'recommended',
+          title: 'For Your Taste',
+          subtitle: 'Built from your ratings',
+          data: recommended.slice(0, 18),
+        },
+        {
+          key: 'popular',
+          title: 'Popular Picks',
+          subtitle: 'Strong all-round choices',
+          data: uniqueMovies(page1).slice(0, 18),
+        },
+        {
+          key: 'gems',
+          title: 'Hidden Gems',
+          subtitle: 'Less obvious picks worth trying',
+          data: hiddenGems.slice(0, 18),
+        },
+        {
+          key: 'deepcuts',
+          title: 'Deep Cuts',
+          subtitle: 'More from the full catalog',
+          data: uniqueMovies(page3).slice(0, 18),
+        },
+      ].filter((row) => row.data.length > 0);
+
+      setRows(nextRows);
     } catch (error) {
-      console.error('Failed to load movies:', error);
+      console.error('Failed to load home data:', error);
+      setRows([]);
+      setFeatured(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const spotlight = useMemo(() => {
+    if (!rows.length) return [];
+    return uniqueMovies(rows.flatMap((row) => row.data)).slice(0, 4);
+  }, [rows]);
+
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#dc2626" />
+      <View style={styles.loadingWrap}>
+        <ActivityIndicator size="large" color="#ef4444" />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Welcome</Text>
-        <Text style={styles.headerSubtitle}>Discover amazing movies</Text>
-      </View>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.topGradient} />
 
-      <View style={styles.quickStats}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{watchlistCount}</Text>
-          <Text style={styles.statText}>Watchlist</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{trending.length}</Text>
-          <Text style={styles.statText}>Trending</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{recommended.length}</Text>
-          <Text style={styles.statText}>For You</Text>
-        </View>
-      </View>
+      {featured ? (
+        <TouchableOpacity
+          style={styles.heroWrap}
+          activeOpacity={0.92}
+          onPress={() => navigation.navigate('MovieDetail', { movie: featured })}
+        >
+          <Image
+            source={{ uri: resolveBackdropUrl(featured.backdrop, featured.poster) || posterFallback }}
+            style={styles.heroImage}
+          />
+          <View style={styles.heroOverlay}>
+            <View style={styles.heroBadgeRow}>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>Home</Text>
+              </View>
+              <View style={styles.heroRatingBadge}>
+                <Text style={styles.heroRatingText}>{featured.rating.toFixed(1)}/10</Text>
+              </View>
+            </View>
 
-      <Text style={styles.sectionTitle}>Trending Now</Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={trending.slice(0, 10)}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.movieCard}
-            onPress={() => navigation.navigate('MovieDetail', { movie: item })}
-          >
-            <Image
-              source={{ uri: item.poster }}
-              style={styles.moviePoster}
-            />
-            <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
-          </TouchableOpacity>
-        )}
-        scrollEnabled={true}
-        style={styles.horizontalList}
-      />
-
-      <Text style={styles.sectionTitle}>New Releases (Last 60 Days)</Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={newReleases.slice(0, 10)}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.movieCard}
-            onPress={() => navigation.navigate('MovieDetail', { movie: item })}
-          >
-            <Image
-              source={{ uri: item.poster }}
-              style={styles.moviePoster}
-            />
-            <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.movieMeta} numberOfLines={1}>Released {formatReleaseDate(item.releaseDate)}</Text>
-          </TouchableOpacity>
-        )}
-        scrollEnabled={true}
-        style={styles.horizontalList}
-      />
-      {newReleases.length === 0 ? <Text style={styles.emptySectionText}>No recent releases right now.</Text> : null}
-
-      <Text style={styles.sectionTitle}>Upcoming This Year</Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={upcomingThisYear.slice(0, 10)}
-        keyExtractor={(item) => `${item.id}-upcoming`}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.movieCard}
-            onPress={() => navigation.navigate('MovieDetail', { movie: item })}
-          >
-            <Image
-              source={{ uri: item.poster }}
-              style={styles.moviePoster}
-            />
-            <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.movieMeta} numberOfLines={1}>Comes on {formatReleaseDate(item.releaseDate)}</Text>
-          </TouchableOpacity>
-        )}
-        scrollEnabled={true}
-        style={styles.horizontalList}
-      />
-      {upcomingThisYear.length === 0 ? <Text style={styles.emptySectionText}>No upcoming titles for this year yet.</Text> : null}
-
-      <Text style={styles.sectionTitle}>Recommended For You</Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={recommended.slice(0, 10)}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.movieCard}
-            onPress={() => navigation.navigate('MovieDetail', { movie: item })}
-          >
-            <Image
-              source={{ uri: item.poster }}
-              style={styles.moviePoster}
-            />
-            <Text style={styles.movieTitle} numberOfLines={2}>{item.title}</Text>
-          </TouchableOpacity>
-        )}
-        scrollEnabled={true}
-        style={styles.horizontalList}
-      />
-
-      <View style={styles.discoveryCard}>
-        <Text style={styles.discoveryTitle}>Continue discovering</Text>
-        <Text style={styles.discoveryText}>
-          Explore more genres, search for new titles, and keep your watchlist up to date.
-        </Text>
-        <TouchableOpacity style={styles.discoveryButton} onPress={() => navigation.navigate('Explore')}>
-          <Text style={styles.discoveryButtonText}>Open Explore</Text>
+            <Text style={styles.heroTitle} numberOfLines={2}>{featured.title}</Text>
+            <Text style={styles.heroMeta} numberOfLines={1}>
+              {getBadgeText(featured)}
+              {featured.releaseDate ? ` • ${new Date(featured.releaseDate).getFullYear()}` : ''}
+            </Text>
+            <Text style={styles.heroDescription} numberOfLines={3}>{featured.description}</Text>
+          </View>
         </TouchableOpacity>
-      </View>
+      ) : null}
+
+      {spotlight.length > 0 ? (
+        <View style={styles.spotlightWrap}>
+          <Text style={styles.spotlightTitle}>Tonight's Spotlight</Text>
+          <View style={styles.spotlightGrid}>
+            {spotlight.map((movie) => (
+              <TouchableOpacity
+                key={`spotlight-${movie.id}-${movie.tmdbId || ''}`}
+                style={styles.spotlightCard}
+                onPress={() => navigation.navigate('MovieDetail', { movie })}
+              >
+                <Image source={{ uri: resolvePosterUrl(movie.poster) || posterFallback }} style={styles.spotlightPoster} />
+                <Text style={styles.spotlightMovieTitle} numberOfLines={1}>{movie.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {rows.map((row) => (
+        <View key={row.key} style={styles.sectionWrap}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{row.title}</Text>
+            <Text style={styles.sectionSubtitle}>{row.subtitle}</Text>
+          </View>
+
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={row.data}
+            keyExtractor={(item) => `${row.key}-${item.id}-${item.tmdbId || ''}`}
+            contentContainerStyle={styles.rowListContent}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => navigation.navigate('MovieDetail', { movie: item })}
+                activeOpacity={0.9}
+              >
+                <Image
+                  source={{ uri: resolvePosterUrl(item.poster) || posterFallback }}
+                  style={styles.cardPoster}
+                />
+                <View style={styles.cardTopBadge}>
+                  <Text style={styles.cardTopBadgeText}>{item.type === 'series' ? 'Series' : 'Movie'}</Text>
+                </View>
+                <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+                <Text style={styles.cardMeta} numberOfLines={1}>{getBadgeText(item)}</Text>
+                <Text style={styles.cardMeta} numberOfLines={1}>{formatReleaseDate(item.releaseDate)}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      ))}
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
@@ -256,117 +306,183 @@ export function HomeScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0d0f14',
   },
-  header: {
-    padding: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 5,
-  },
-  quickStats: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-    gap: 10,
-  },
-  statCard: {
+  loadingWrap: {
     flex: 1,
-    backgroundColor: '#242424',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0d0f14',
   },
-  statValue: {
+  topGradient: {
+    height: 10,
+    backgroundColor: '#18121a',
+  },
+  heroWrap: {
+    marginHorizontal: 14,
+    marginTop: 12,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#171a22',
+    borderColor: '#2b3040',
+    borderWidth: 1,
+  },
+  heroImage: {
+    width: '100%',
+    height: 310,
+    backgroundColor: '#232735',
+  },
+  heroOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(8, 10, 16, 0.52)',
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  heroBadge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  heroBadgeText: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  heroRatingBadge: {
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  heroRatingText: {
+    color: '#fff',
+    fontSize: 11,
     fontWeight: '700',
   },
-  statText: {
-    color: '#999',
-    marginTop: 4,
-    fontSize: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  heroTitle: {
     color: '#fff',
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    fontSize: 30,
+    fontWeight: '800',
+    maxWidth: '92%',
+  },
+  heroMeta: {
+    color: '#e4e4e7',
+    fontSize: 13,
+    marginTop: 7,
+  },
+  heroDescription: {
+    color: '#f4f4f5',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 8,
+    maxWidth: '96%',
+  },
+  spotlightWrap: {
+    marginTop: 18,
+    paddingHorizontal: 14,
+  },
+  spotlightTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
     marginBottom: 10,
   },
-  horizontalList: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+  spotlightGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  movieCard: {
-    marginRight: 15,
-    width: 120,
-  },
-  moviePoster: {
-    width: 120,
-    height: 180,
-    borderRadius: 8,
-    backgroundColor: '#2a2a2a',
-  },
-  movieTitle: {
-    color: '#fff',
-    fontSize: 12,
-    marginTop: 8,
-    maxWidth: 120,
-  },
-  movieMeta: {
-    color: '#a3a3a3',
-    fontSize: 11,
-    marginTop: 4,
-    maxWidth: 120,
-  },
-  emptySectionText: {
-    color: '#8a8a8a',
-    fontSize: 12,
-    marginTop: -10,
-    marginBottom: 16,
-    paddingHorizontal: 20,
-  },
-  discoveryCard: {
-    marginHorizontal: 20,
-    marginTop: 8,
-    borderRadius: 12,
-    backgroundColor: '#2a1a1a',
-    borderColor: '#4a1f1f',
+  spotlightCard: {
+    width: '48%',
+    backgroundColor: '#151923',
+    borderColor: '#272d3d',
     borderWidth: 1,
-    padding: 14,
+    borderRadius: 14,
+    padding: 8,
   },
-  discoveryTitle: {
+  spotlightPoster: {
+    width: '100%',
+    height: 132,
+    borderRadius: 10,
+    backgroundColor: '#232735',
+  },
+  spotlightMovieTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '700',
+    marginTop: 7,
   },
-  discoveryText: {
-    color: '#cfcfcf',
-    marginTop: 6,
-    lineHeight: 20,
+  sectionWrap: {
+    marginTop: 18,
   },
-  discoveryButton: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    backgroundColor: '#dc2626',
-    borderRadius: 999,
+  sectionHeader: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    marginBottom: 10,
   },
-  discoveryButtonText: {
+  sectionTitle: {
     color: '#fff',
+    fontSize: 19,
     fontWeight: '700',
+  },
+  sectionSubtitle: {
+    color: '#9ca3af',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  rowListContent: {
+    paddingHorizontal: 14,
+  },
+  card: {
+    width: 146,
+    marginRight: 12,
+  },
+  cardPoster: {
+    width: 146,
+    height: 218,
+    borderRadius: 14,
+    backgroundColor: '#232735',
+  },
+  cardTopBadge: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    backgroundColor: 'rgba(10, 12, 18, 0.86)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  cardTopBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cardTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  cardMeta: {
+    color: '#9ca3af',
+    fontSize: 11,
+    marginTop: 3,
   },
   bottomSpacer: {
-    height: 28,
+    height: 24,
   },
 });

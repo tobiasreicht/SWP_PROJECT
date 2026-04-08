@@ -53,8 +53,12 @@ export const authAPI = {
 export const moviesAPI = {
   getAll: (page = 1, limit = 20) =>
     apiClient.get('/movies', { params: { page, limit } }),
-  getById: (id: string) => apiClient.get(`/movies/${id}`),
-  getCast: (id: string, limit = 20) => apiClient.get(`/movies/${id}/cast`, { params: { limit } }),
+  getById: (id: string, type?: 'movie' | 'series') =>
+    apiClient.get(`/movies/${id}`, { params: type ? { type } : undefined }),
+  getCast: (id: string, limit = 20, type?: 'movie' | 'series') =>
+    apiClient.get(`/movies/${id}/cast`, { params: { limit, ...(type ? { type } : {}) } }),
+  getSeriesSeason: (id: string, seasonNumber: number) =>
+    apiClient.get(`/movies/${id}/seasons/${seasonNumber}`),
   search: (query: string) =>
     apiClient.get('/movies/search', { params: { q: query } }),
   searchActors: (query: string) =>

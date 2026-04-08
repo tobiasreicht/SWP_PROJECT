@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,37 +8,116 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  TextInput,
   FlatList,
   Modal,
   Share,
+  Linking,
 } from 'react-native';
-import { Actor, Movie, Rating } from '../types';
-import { friendsAPI, messagesAPI, moviesAPI, watchlistAPI, ratingsAPI } from '../services/api';
+import { Actor, Movie, Rating, SeriesEpisode, WatchlistItem } from '../types';
+import { friendsAPI, messagesAPI, moviesAPI, ratingsAPI, watchlistAPI } from '../services/api';
+import { getPosterFallbackUrl, resolveBackdropUrl, resolvePosterUrl } from '../utils/media';
 
 const FALLBACK_ACTOR = 'https://placehold.co/200x300/1f2937/e5e7eb?text=Actor';
 
+const formatDate = (value?: string | Date | null) => {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleDateString();
+};
+
+const isNavigableActorId = (value: number | string) => Number.isFinite(Number(value));
+
 export function MovieDetailScreen({ route, navigation }: any) {
-  const { movie } = route.params as { movie: Movie };
-  const [rating, setRating] = useState<number | null>(null);
-  const [review, setReview] = useState('');
+  const { movie: routeMovie } = route.params as { movie: Movie };
+  const [movie, setMovie] = useState<Movie>(routeMovie);
   const [loading, setLoading] = useState(false);
-  const [showReviewForm, setShowReviewForm] = useState(false);
   const [castActors, setCastActors] = useState<Actor[]>([]);
   const [loadingCast, setLoadingCast] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [friends, setFriends] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [sharingToFriendId, setSharingToFriendId] = useState<string | null>(null);
+  const [ratings, setRatings] = useState<Rating[]>([]);
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [episodesBySeason, setEpisodesBySeason] = useState<Record<number, SeriesEpisode[]>>({});
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
+  const [backdropFailed, setBackdropFailed] = useState(false);
+
+  const targetId = String(movie.tmdbId || movie.id);
+  const posterUrl = posterFailed ? getPosterFallbackUrl() : resolvePosterUrl(movie.poster);
+  const backdropUrl = backdropFailed ? posterUrl : resolveBackdropUrl(movie.backdrop, movie.poster);
+
+  const matchedWatchlistItem = useMemo(() => {
+    const tmdbCandidate = movie.tmdbId || Number(movie.id);
+    return watchlistItems.find((item) => {
+      if (item.movieId === movie.id) return true;
+      if (!Number.isFinite(tmdbCandidate)) return false;
+      return item.movie?.tmdbId === tmdbCandidate;
+    });
+  }, [movie.id, movie.tmdbId, watchlistItems]);
+
+  const userRating = useMemo(() => {
+    return ratings.find((entry) => {
+      if (entry.movieId === movie.id) return true;
+      if (matchedWatchlistItem && entry.movieId === matchedWatchlistItem.movieId) return true;
+      if (movie.tmdbId && entry.movieId === String(movie.tmdbId)) return true;
+      return false;
+    });
+  }, [matchedWatchlistItem, movie.id, movie.tmdbId, ratings]);
+
+  const seasons = useMemo(() => (movie.seasons || []).filter((season) => season.seasonNumber > 0), [movie.seasons]);
 
   useEffect(() => {
-    loadCast();
-  }, [movie.id]);
+    navigation.setOptions({
+      headerTitle: movie.type === 'series' ? 'Series Details' : 'Movie Details',
+    });
+  }, [movie.type, navigation]);
+
+  useEffect(() => {
+    void Promise.all([loadDetails(), loadCast(), loadUserData()]);
+  }, [routeMovie.id]);
+
+  useEffect(() => {
+    if (seasons.length === 0) {
+      setSelectedSeason(null);
+      return;
+    }
+
+    setSelectedSeason((current) => {
+      if (current && seasons.some((season) => season.seasonNumber === current)) {
+        return current;
+      }
+      return seasons[0].seasonNumber;
+    });
+  }, [seasons]);
+
+  useEffect(() => {
+    if (movie.type !== 'series' || !selectedSeason || episodesBySeason[selectedSeason]) {
+      return;
+    }
+
+    void loadSeasonEpisodes(selectedSeason);
+  }, [movie.type, selectedSeason, episodesBySeason, targetId]);
+
+  const loadDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await moviesAPI.getById(targetId);
+      setMovie(response.data as Movie);
+    } catch (error) {
+      console.error('Failed to load details:', error);
+      setMovie(routeMovie);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadCast = async () => {
     try {
       setLoadingCast(true);
-      const targetId = String(movie.tmdbId || movie.id);
       const response = await moviesAPI.getCast(targetId, 20);
       setCastActors(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
@@ -49,37 +128,49 @@ export function MovieDetailScreen({ route, navigation }: any) {
     }
   };
 
-  const handleAddToWatchlist = async () => {
+  const loadUserData = async () => {
     try {
-      setLoading(true);
-      await watchlistAPI.add({ movieId: movie.id });
-      Alert.alert('Success', 'Added to watchlist');
+      const [ratingsRes, watchlistRes] = await Promise.all([
+        ratingsAPI.getUserRatings(),
+        watchlistAPI.getAll(),
+      ]);
+      const fetchedRatings = Array.isArray(ratingsRes.data) ? ratingsRes.data : ratingsRes.data?.data || [];
+      const fetchedWatchlist = Array.isArray(watchlistRes.data) ? watchlistRes.data : watchlistRes.data?.data || [];
+      setRatings(fetchedRatings as Rating[]);
+      setWatchlistItems(fetchedWatchlist as WatchlistItem[]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to add to watchlist');
-    } finally {
-      setLoading(false);
+      console.error('Failed to load rating/watchlist data:', error);
     }
   };
 
-  const handleRateMovie = async () => {
-    if (rating === null) {
-      Alert.alert('Error', 'Please select a rating');
-      return;
+  const loadSeasonEpisodes = async (seasonNumber: number) => {
+    try {
+      setLoadingEpisodes(true);
+      const response = await moviesAPI.getSeriesSeason(targetId, seasonNumber);
+      const episodes = Array.isArray(response.data) ? response.data : [];
+      setEpisodesBySeason((current) => ({ ...current, [seasonNumber]: episodes as SeriesEpisode[] }));
+    } catch (error) {
+      console.error('Failed to load season episodes:', error);
+      setEpisodesBySeason((current) => ({ ...current, [seasonNumber]: [] }));
+    } finally {
+      setLoadingEpisodes(false);
     }
+  };
 
+  const handleToggleWatchlist = async () => {
     try {
       setLoading(true);
-      await ratingsAPI.create({
-        movieId: movie.id,
-        rating,
-        review: review || undefined,
-      });
-      Alert.alert('Success', 'Movie rated');
-      setRating(null);
-      setReview('');
-      setShowReviewForm(false);
+      if (matchedWatchlistItem) {
+        await watchlistAPI.remove(matchedWatchlistItem.movieId);
+        Alert.alert('Updated', 'Removed from watchlist');
+      } else {
+        await watchlistAPI.add({ movieId: String(movie.tmdbId || movie.id), priority: 'medium', status: 'planned' });
+        Alert.alert('Updated', 'Added to watchlist');
+      }
+      await loadUserData();
     } catch (error) {
-      Alert.alert('Error', 'Failed to rate movie');
+      console.error('Failed to update watchlist:', error);
+      Alert.alert('Error', 'Failed to update watchlist');
     } finally {
       setLoading(false);
     }
@@ -88,21 +179,18 @@ export function MovieDetailScreen({ route, navigation }: any) {
   const getSharePayload = () => {
     const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : '';
     const tmdbId = movie.tmdbId || Number(movie.id);
+    const mediaPath = movie.type === 'series' ? 'tv' : 'movie';
     const tmdbUrl = Number.isFinite(tmdbId)
-      ? `https://www.themoviedb.org/movie/${tmdbId}`
+      ? `https://www.themoviedb.org/${mediaPath}/${tmdbId}`
       : '';
 
-    const message = [
-      `Check this movie: ${movie.title}${year ? ` (${year})` : ''}`,
-      `Rating: ${movie.rating.toFixed(1)}/10`,
-      movie.description,
-      tmdbUrl,
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-
     return {
-      message,
+      message: [
+        `Check this ${movie.type === 'series' ? 'series' : 'movie'}: ${movie.title}${year ? ` (${year})` : ''}`,
+        `TMDB rating: ${movie.rating.toFixed(1)}/10`,
+        movie.description,
+        tmdbUrl,
+      ].filter(Boolean).join('\n\n'),
       tmdbId: Number.isFinite(tmdbId) ? tmdbId : undefined,
     };
   };
@@ -134,16 +222,16 @@ export function MovieDetailScreen({ route, navigation }: any) {
       setSharingToFriendId(friendId);
       const payload = getSharePayload();
       await messagesAPI.send(friendId, {
-        text: `I think you'll like this one!`,
+        text: `I think you'll like this ${movie.type === 'series' ? 'series' : 'movie'}!`,
         movieTmdbId: payload.tmdbId,
         movieTitle: movie.title,
         moviePoster: movie.poster,
       });
       setShareModalOpen(false);
-      Alert.alert('Shared', 'Movie shared in chat.');
+      Alert.alert('Shared', 'Title shared in chat.');
     } catch (error) {
-      console.error('Failed to share movie in chat:', error);
-      Alert.alert('Error', 'Failed to share movie in chat.');
+      console.error('Failed to share title in chat:', error);
+      Alert.alert('Error', 'Failed to share in chat.');
     } finally {
       setSharingToFriendId(null);
     }
@@ -152,48 +240,63 @@ export function MovieDetailScreen({ route, navigation }: any) {
   const handleNativeShare = async () => {
     try {
       const payload = getSharePayload();
-      await Share.share({
-        message: payload.message,
-      });
+      await Share.share({ message: payload.message });
     } catch (error) {
       console.error('Native share failed:', error);
     }
   };
 
+  const handleOpenActor = (actor: Actor) => {
+    if (!isNavigableActorId(actor.id)) {
+      Alert.alert('Unavailable', 'This cast profile is not available for this title.');
+      return;
+    }
+
+    navigation.navigate('ActorProfile', { actorId: String(actor.id) });
+  };
+
+  const activeEpisodes = selectedSeason ? episodesBySeason[selectedSeason] || [] : [];
+
   return (
     <ScrollView style={styles.container}>
-      <Image source={{ uri: movie.backdrop }} style={styles.backdrop} />
+      <Image source={{ uri: backdropUrl }} style={styles.backdrop} onError={() => setBackdropFailed(true)} />
 
       <View style={styles.content}>
-        <Image source={{ uri: movie.poster }} style={styles.poster} />
+        <Image source={{ uri: posterUrl }} style={styles.poster} onError={() => setPosterFailed(true)} />
 
         <Text style={styles.title}>{movie.title}</Text>
         <Text style={styles.releaseDate}>
-          {new Date(movie.releaseDate).getFullYear()} • {movie.type}
+          {new Date(movie.releaseDate).getFullYear()} • {movie.type === 'series' ? 'Series' : 'Movie'}
+          {movie.type === 'series' && movie.seasonCount ? ` • ${movie.seasonCount} seasons` : ''}
         </Text>
 
         <Text style={styles.description}>{movie.description}</Text>
 
         <View style={styles.infoRow}>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Rating</Text>
+            <Text style={styles.infoLabel}>TMDB</Text>
             <Text style={styles.infoValue}>{movie.rating.toFixed(1)}/10</Text>
           </View>
-          {movie.runtime && (
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Your Rating</Text>
+            <Text style={styles.infoValue}>{userRating ? `${userRating.rating}/10` : 'Watchlist only'}</Text>
+          </View>
+          {movie.runtime ? (
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Runtime</Text>
+              <Text style={styles.infoLabel}>{movie.type === 'series' ? 'Episode Runtime' : 'Runtime'}</Text>
               <Text style={styles.infoValue}>{movie.runtime} min</Text>
             </View>
-          )}
-          {movie.director && (
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Director</Text>
-              <Text style={styles.infoValue}>{movie.director}</Text>
-            </View>
-          )}
+          ) : null}
         </View>
 
-        {movie.genres.length > 0 && (
+        {movie.director ? (
+          <Text style={styles.metaLine}>
+            <Text style={styles.metaLabel}>{movie.type === 'series' ? 'Creator' : 'Director'}: </Text>
+            <Text style={styles.metaValue}>{movie.director}</Text>
+          </Text>
+        ) : null}
+
+        {movie.genres.length > 0 ? (
           <>
             <Text style={styles.sectionTitle}>Genres</Text>
             <View style={styles.genreList}>
@@ -204,13 +307,63 @@ export function MovieDetailScreen({ route, navigation }: any) {
               ))}
             </View>
           </>
-        )}
+        ) : null}
 
-        {(loadingCast || castActors.length > 0 || movie.cast.length > 0) && (
+        {movie.streamingPlatforms.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Where to watch</Text>
+            <View style={styles.platformList}>
+              {movie.streamingPlatforms.map((platform) => (
+                <TouchableOpacity key={platform.platform} style={styles.platformTag} onPress={() => Linking.openURL(platform.url)}>
+                  <Text style={styles.platformText}>{platform.platform}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {movie.type === 'series' && seasons.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Season Overview</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.seasonTabs}>
+              {seasons.map((season) => (
+                <TouchableOpacity
+                  key={season.id}
+                  style={[styles.seasonChip, selectedSeason === season.seasonNumber && styles.seasonChipActive]}
+                  onPress={() => setSelectedSeason(season.seasonNumber)}
+                >
+                  <Text style={[styles.seasonChipText, selectedSeason === season.seasonNumber && styles.seasonChipTextActive]}>
+                    S{season.seasonNumber} • {season.episodeCount} eps
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.episodesWrap}>
+              {loadingEpisodes ? (
+                <ActivityIndicator size="small" color="#dc2626" />
+              ) : activeEpisodes.length > 0 ? (
+                activeEpisodes.map((episode) => (
+                  <View key={episode.id} style={styles.episodeCard}>
+                    <Text style={styles.episodeTitle}>E{episode.episodeNumber}: {episode.name}</Text>
+                    <Text style={styles.episodeMeta}>
+                      {formatDate(episode.airDate)}{episode.runtime ? ` • ${episode.runtime} min` : ''}
+                    </Text>
+                    {episode.overview ? <Text style={styles.episodeOverview}>{episode.overview}</Text> : null}
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyEpisodes}>No episode details available.</Text>
+              )}
+            </View>
+          </>
+        ) : null}
+
+        {(loadingCast || castActors.length > 0 || movie.cast.length > 0) ? (
           <>
             <Text style={styles.sectionTitle}>Cast</Text>
             {loadingCast ? (
-              <ActivityIndicator size="small" color="#dc2626" style={{ marginBottom: 8 }} />
+              <ActivityIndicator size="small" color="#dc2626" style={styles.castLoader} />
             ) : castActors.length > 0 ? (
               <FlatList
                 horizontal
@@ -221,7 +374,7 @@ export function MovieDetailScreen({ route, navigation }: any) {
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.castCard}
-                    onPress={() => navigation.navigate('ActorProfile', { actorId: String(item.id) })}
+                    onPress={() => handleOpenActor(item)}
                   >
                     <Image source={{ uri: item.profilePath || FALLBACK_ACTOR }} style={styles.castImage} />
                     <View style={styles.castOverlay}>
@@ -235,94 +388,20 @@ export function MovieDetailScreen({ route, navigation }: any) {
               <Text style={styles.castText}>{movie.cast.join(', ')}</Text>
             )}
           </>
-        )}
-
-        {movie.streamingPlatforms.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Available On</Text>
-            <View style={styles.platformList}>
-              {movie.streamingPlatforms.map((platform) => (
-                <TouchableOpacity key={platform.platform} style={styles.platformTag}>
-                  <Text style={styles.platformText}>{platform.platform}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
+        ) : null}
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleAddToWatchlist}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Add to Watchlist</Text>
-            )}
+          <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleToggleWatchlist} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{matchedWatchlistItem ? 'Remove from Watchlist' : 'Add to Watchlist'}</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={() => setShowReviewForm(!showReviewForm)}
-          >
-            <Text style={styles.buttonText}>Rate Movie</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={handleOpenShare}
-          >
-            <Text style={styles.buttonText}>Share Movie</Text>
+          <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={handleOpenShare}>
+            <Text style={styles.buttonText}>Share {movie.type === 'series' ? 'Series' : 'Movie'}</Text>
           </TouchableOpacity>
         </View>
-
-        {showReviewForm && (
-          <View style={styles.reviewForm}>
-            <Text style={styles.formTitle}>Rate this movie</Text>
-
-            <View style={styles.ratingStars}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  style={[styles.star, rating !== null && rating >= star ? styles.starActive : null]}
-                  onPress={() => setRating(star)}
-                >
-                  <Text style={styles.starText}>★</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {rating && <Text style={styles.selectedRating}>You rated: {rating}/10</Text>}
-
-            <TextInput
-              style={styles.reviewInput}
-              placeholder="Write a review (optional)..."
-              placeholderTextColor="#666"
-              value={review}
-              onChangeText={setReview}
-              multiline
-              numberOfLines={4}
-            />
-
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.buttonDisabled]}
-              onPress={handleRateMovie}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>Submit Rating</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
 
-      <Modal
-        visible={shareModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShareModalOpen(false)}
-      >
+      <Modal visible={shareModalOpen} transparent animationType="slide" onRequestClose={() => setShareModalOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.shareSheet}>
             <Text style={styles.shareTitle}>Share {movie.title}</Text>
@@ -348,9 +427,7 @@ export function MovieDetailScreen({ route, navigation }: any) {
                       <Text style={styles.shareFriendAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
                     </View>
                     <Text style={styles.shareFriendName}>{item.name}</Text>
-                    <Text style={styles.shareFriendAction}>
-                      {sharingToFriendId === item.id ? 'Sending...' : 'Send'}
-                    </Text>
+                    <Text style={styles.shareFriendAction}>{sharingToFriendId === item.id ? 'Sending...' : 'Send'}</Text>
                   </TouchableOpacity>
                 )}
               />
@@ -371,69 +448,88 @@ export function MovieDetailScreen({ route, navigation }: any) {
   );
 }
 
+export default MovieDetailScreen;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#121217',
   },
   backdrop: {
     width: '100%',
-    height: 250,
+    height: 260,
+    backgroundColor: '#1f1f24',
   },
   content: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     paddingBottom: 30,
-    marginTop: -60,
+    marginTop: -70,
   },
   poster: {
-    width: 120,
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 15,
-    backgroundColor: '#2a2a2a',
+    width: 132,
+    height: 198,
+    borderRadius: 14,
+    marginBottom: 16,
+    backgroundColor: '#25252c',
+    borderColor: '#2f2f38',
+    borderWidth: 1,
   },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#fff',
   },
   releaseDate: {
-    color: '#999',
+    color: '#a1a1aa',
     fontSize: 14,
-    marginTop: 5,
+    marginTop: 6,
   },
   description: {
-    color: '#ccc',
+    color: '#d4d4d8',
     fontSize: 14,
-    lineHeight: 20,
-    marginTop: 15,
+    lineHeight: 22,
+    marginTop: 16,
   },
   infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 15,
-    paddingVertical: 15,
-    borderTopColor: '#2a2a2a',
+    gap: 12,
+    marginVertical: 18,
+    paddingVertical: 16,
+    borderTopColor: '#25252c',
     borderTopWidth: 1,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: '#25252c',
     borderBottomWidth: 1,
   },
   infoItem: {
     flex: 1,
   },
   infoLabel: {
-    color: '#999',
-    fontSize: 12,
+    color: '#8f8f99',
+    fontSize: 11,
+    textTransform: 'uppercase',
   },
   infoValue: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 5,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  metaLine: {
+    marginTop: -4,
+    marginBottom: 6,
+  },
+  metaLabel: {
+    color: '#8f8f99',
+    fontSize: 13,
+  },
+  metaValue: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#fff',
     marginTop: 20,
     marginBottom: 10,
@@ -444,14 +540,97 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   genreTag: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#1c1c23',
+    borderColor: '#2e2e38',
+    borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   genreText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  platformList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  platformTag: {
+    backgroundColor: '#242430',
+    borderColor: '#343447',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  platformText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  seasonTabs: {
+    paddingBottom: 8,
+  },
+  seasonChip: {
+    backgroundColor: '#1c1c23',
+    borderColor: '#303040',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginRight: 8,
+  },
+  seasonChipActive: {
+    backgroundColor: '#312e81',
+    borderColor: '#6366f1',
+  },
+  seasonChipText: {
+    color: '#d4d4d8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  seasonChipTextActive: {
+    color: '#eef2ff',
+  },
+  episodesWrap: {
+    backgroundColor: '#18181f',
+    borderColor: '#27272f',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+  },
+  episodeCard: {
+    backgroundColor: '#101016',
+    borderColor: '#262630',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  episodeTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  episodeMeta: {
+    color: '#a1a1aa',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  episodeOverview: {
+    color: '#d4d4d8',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  emptyEpisodes: {
+    color: '#8f8f99',
+    fontSize: 13,
+  },
+  castLoader: {
+    marginBottom: 8,
   },
   castText: {
     color: '#ccc',
@@ -494,22 +673,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 11,
   },
-  platformList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  platformTag: {
-    backgroundColor: '#dc2626',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  platformText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   actions: {
     gap: 10,
     marginVertical: 20,
@@ -517,69 +680,21 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#dc2626',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
   secondaryButton: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#444',
+    backgroundColor: '#1f1f27',
+    borderColor: '#3a3a48',
     borderWidth: 1,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  reviewForm: {
-    backgroundColor: '#2a2a2a',
-    padding: 15,
-    borderRadius: 8,
-    marginTop: 15,
-  },
-  formTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  ratingStars: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 15,
-  },
-  star: {
-    padding: 8,
-  },
-  starActive: {
-    opacity: 1,
-  },
-  starText: {
-    fontSize: 24,
-    color: '#999',
-  },
-  selectedRating: {
-    color: '#dc2626',
-    fontSize: 14,
-    marginBottom: 10,
-    fontWeight: 'bold',
-  },
-  reviewInput: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#444',
-    borderWidth: 1,
-    color: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  submitButton: {
-    backgroundColor: '#dc2626',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
   },
   modalBackdrop: {
     flex: 1,

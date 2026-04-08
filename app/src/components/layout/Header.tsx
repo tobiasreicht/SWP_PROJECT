@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Compass, Bookmark, Users, BarChart2, Bell, Search, LogOut, X } from 'lucide-react';
 import { useAuthStore, useMessengerStore } from '../../store';
@@ -18,6 +18,7 @@ export const Header: React.FC = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [inbox, setInbox] = useState<SocialMessage[]>([]);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -40,6 +41,28 @@ export const Header: React.FC = () => {
     return () => window.clearInterval(id);
   }, [user]);
 
+  useEffect(() => {
+    if (!showSearch) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 120);
+
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowSearch(false);
+      }
+    };
+
+    window.addEventListener('keydown', onEscape);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('keydown', onEscape);
+    };
+  }, [showSearch]);
+
   const handleOpenInboxItem = async (msg: SocialMessage) => {
     try { await messagesAPI.markInboxRead({ senderId: msg.senderId }); await loadInbox(); } catch {}
     setShowInbox(false);
@@ -53,7 +76,7 @@ export const Header: React.FC = () => {
     if (searchQuery.trim()) {
       navigate(`/explore?q=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
-      setShowSearch(false);
+      searchInputRef.current?.blur();
     }
   };
 
@@ -61,11 +84,11 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#08080e]/90 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 md:px-8">
+      <div className="w-full px-2 md:px-4">
         <div className="flex items-center justify-between h-14 gap-4">
 
           {/* Logo */}
-          <Link to="/" className="flex-shrink-0 flex items-center gap-2.5 group">
+          <Link to="/" className="-ml-1 md:-ml-0.5 flex-shrink-0 flex items-center gap-2.5 group">
             <span className="h-10 w-16 rounded-xl grid place-items-center overflow-hidden px-1">
               <img
                 src="/watch-togther-logo.png"
@@ -73,8 +96,9 @@ export const Header: React.FC = () => {
                 className="h-9 w-14 object-contain"
               />
             </span>
-            <span className="text-sm md:text-base font-semibold tracking-wide text-white/80 group-hover:text-white transition-colors">
-              Watch Together
+            <span className="text-xs md:text-sm font-semibold tracking-wide text-white/80 group-hover:text-white transition-colors">
+              <span className="text-red-700">Watch</span>{' '}
+              <span className="text-[11px] md:text-xs">Together</span>
             </span>
           </Link>
 
@@ -103,30 +127,17 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-1">
 
             {/* Search */}
-            {showSearch ? (
-              <form onSubmit={handleSearch} className="flex items-center gap-1">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Search movies or actors…"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onBlur={() => { if (!searchQuery) setShowSearch(false); }}
-                  className="w-44 px-3 py-1.5 rounded-lg bg-white/[0.08] border border-white/[0.1] text-white placeholder-gray-500 text-sm focus:outline-none focus:border-red-500/50"
-                />
-                <button type="button" onClick={() => setShowSearch(false)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/[0.06]">
-                  <X size={16} />
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowSearch(true)}
-                className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
-              >
-                <Search size={18} />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowSearch(true)}
+              className={`p-2 rounded-lg transition-colors ${
+                showSearch
+                  ? 'text-white bg-white/[0.08]'
+                  : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+              }`}
+            >
+              <Search size={18} />
+            </button>
 
             {/* Bell */}
             <div className="relative">
@@ -201,6 +212,45 @@ export const Header: React.FC = () => {
               </Link>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Expanded Search */}
+      <div
+        className={`absolute left-0 right-0 top-full px-3 md:px-4 pt-2 transition-all duration-300 ease-out ${
+          showSearch
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 -translate-y-2 pointer-events-none'
+        }`}
+      >
+        <div className="flex justify-center">
+          <form
+            onSubmit={handleSearch}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setShowSearch(false);
+              }
+            }}
+            className="w-full max-w-lg pointer-events-auto"
+          >
+            <div className="flex items-center gap-2 rounded-2xl border border-white/[0.14] bg-[#111118]/85 px-2.5 py-2 shadow-xl backdrop-blur-md">
+              <Search size={16} className="text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search movies or actors..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm focus:outline-none"
+              />
+              <button type="submit" className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors">
+                Search
+              </button>
+              <button type="button" onClick={() => setShowSearch(false)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/[0.06]">
+                <X size={16} />
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 

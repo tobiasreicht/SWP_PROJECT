@@ -41,6 +41,30 @@ export interface Movie {
   rating: number;
   trailerUrl?: string | null;
   streamingPlatforms: StreamingPlatform[];
+  seasonCount?: number;
+  episodeCount?: number;
+  seriesStatus?: string;
+  seasons?: SeriesSeasonSummary[];
+}
+
+export interface SeriesSeasonSummary {
+  id: number;
+  seasonNumber: number;
+  name: string;
+  episodeCount: number;
+  airDate?: string | null;
+  poster?: string;
+  overview?: string;
+}
+
+export interface SeriesEpisode {
+  id: number;
+  episodeNumber: number;
+  name: string;
+  runtime?: number;
+  airDate?: string | null;
+  overview?: string;
+  stillPath?: string;
 }
 
 export interface Actor {

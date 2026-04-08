@@ -76,6 +76,7 @@ export const moviesAPI = {
     apiClient.get('/movies', { params: { page, limit } }),
   getById: (id: string) => apiClient.get(`/movies/${id}`),
   getCast: (id: string, limit = 20) => apiClient.get(`/movies/${id}/cast`, { params: { limit } }),
+  getSeriesSeason: (id: string, seasonNumber: number) => apiClient.get(`/movies/${id}/seasons/${seasonNumber}`),
   search: (query: string) =>
     apiClient.get('/movies/search', { params: { q: query } }),
   searchActors: (query: string) =>

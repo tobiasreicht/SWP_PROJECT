@@ -17,22 +17,47 @@ function tmdbKey(): string {
   return process.env.TMDB_API_KEY || '';
 }
 
-export async function fetchMovieDetails(tmdbId: number) {
+type TMDBMediaPath = 'movie' | 'tv';
+
+export async function fetchMovieDetails(tmdbId: number, preferredMediaPath?: TMDBMediaPath) {
   if (!tmdbKey()) throw new Error('TMDB API key not configured');
 
-  const url = `${TMDB_BASE}/movie/${tmdbId}?api_key=${tmdbKey()}&append_to_response=credits`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`TMDB fetch failed: ${resp.status}`);
-  const data = await resp.json();
+  let data: any;
+  let mediaPath: TMDBMediaPath = preferredMediaPath || 'movie';
+
+  const tryOrder: TMDBMediaPath[] = preferredMediaPath
+    ? [preferredMediaPath, preferredMediaPath === 'movie' ? 'tv' : 'movie']
+    : ['movie', 'tv'];
+
+  let lastError: Error | null = null;
+  for (const path of tryOrder) {
+    try {
+      const resp = await fetch(`${TMDB_BASE}/${path}/${tmdbId}?api_key=${tmdbKey()}&append_to_response=credits`);
+      if (!resp.ok) throw new Error(`TMDB ${path} fetch failed: ${resp.status}`);
+      data = await resp.json();
+      mediaPath = path;
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('TMDB detail fetch failed');
+    }
+  }
+
+  if (!data) {
+    throw lastError || new Error('TMDB detail fetch failed');
+  }
 
   const genres = (data.genres || []).map((g: any) => g.name);
-  const director = (data.credits?.crew || []).find((c: any) => c.job === 'Director')?.name;
+  const director =
+    (data.credits?.crew || []).find((c: any) => c.job === 'Director')?.name ||
+    data.created_by?.[0]?.name ||
+    null;
   const cast = (data.credits?.cast || []).slice(0, 6).map((c: any) => c.name);
 
   // fetch watch/providers
   let streamingPlatforms: any[] = [];
   try {
-    const provResp = await fetch(`${TMDB_BASE}/movie/${tmdbId}/watch/providers?api_key=${tmdbKey()}`);
+    const provResp = await fetch(`${TMDB_BASE}/${mediaPath}/${tmdbId}/watch/providers?api_key=${tmdbKey()}`);
     if (provResp.ok) {
       const provData = await provResp.json();
       const country = provData.results?.US || provData.results?.DE || provData.results?.GB || provData.results?.KR || provData.results?.IN;
@@ -51,7 +76,7 @@ export async function fetchMovieDetails(tmdbId: number) {
 
       streamingPlatforms = (providers || []).map((p: any) => ({
         platform: mapName(p.provider_name),
-        url: `https://www.themoviedb.org/movie/${tmdbId}/watch`,
+        url: `https://www.themoviedb.org/${mediaPath}/${tmdbId}/watch`,
       }));
     }
   } catch (e) {
@@ -61,7 +86,7 @@ export async function fetchMovieDetails(tmdbId: number) {
   // fetch trailer/videos
   let trailerUrl: string | null = null;
   try {
-    const videoResp = await fetch(`${TMDB_BASE}/movie/${tmdbId}/videos?api_key=${tmdbKey()}`);
+    const videoResp = await fetch(`${TMDB_BASE}/${mediaPath}/${tmdbId}/videos?api_key=${tmdbKey()}`);
     if (videoResp.ok) {
       const videoData = await videoResp.json();
       const videos = videoData.results || [];
@@ -81,25 +106,41 @@ export async function fetchMovieDetails(tmdbId: number) {
 
   return {
     tmdbId: data.id,
-    title: data.title || data.original_title,
+    title: data.title || data.original_title || data.name || data.original_name,
     description: data.overview || '',
-    releaseDate: data.release_date ? new Date(data.release_date) : new Date(),
-    type: data.media_type || 'movie',
+    releaseDate: data.release_date || data.first_air_date ? new Date(data.release_date || data.first_air_date) : new Date(),
+    type: mediaPath === 'tv' ? 'series' : 'movie',
     genres,
     director: director || null,
     cast,
     poster: data.poster_path ? IMAGE_BASE + data.poster_path : '',
     backdrop: data.backdrop_path ? IMAGE_BASE + data.backdrop_path : '',
-    runtime: data.runtime || null,
+    runtime: data.runtime || data.episode_run_time?.[0] || null,
     rating: typeof data.vote_average === 'number' ? data.vote_average : 0,
     streamingPlatforms,
     trailerUrl,
+    seasonCount: typeof data.number_of_seasons === 'number' ? data.number_of_seasons : undefined,
+    episodeCount: typeof data.number_of_episodes === 'number' ? data.number_of_episodes : undefined,
+    seriesStatus: data.status || undefined,
+    seasons: Array.isArray(data.seasons)
+      ? data.seasons
+          .filter((season: any) => typeof season.season_number === 'number')
+          .map((season: any) => ({
+            id: season.id,
+            seasonNumber: season.season_number,
+            name: season.name || `Season ${season.season_number}`,
+            episodeCount: season.episode_count || 0,
+            airDate: season.air_date || null,
+            poster: season.poster_path ? IMAGE_BASE + season.poster_path : '',
+            overview: season.overview || '',
+          }))
+      : undefined,
   };
 }
 
 export async function searchTMDB(query: string, page = 1) {
   if (!tmdbKey()) throw new Error('TMDB API key not configured');
-  const url = `${TMDB_BASE}/search/movie?api_key=${tmdbKey()}&query=${encodeURIComponent(query)}&page=${page}`;
+  const url = `${TMDB_BASE}/search/multi?api_key=${tmdbKey()}&query=${encodeURIComponent(query)}&page=${page}&include_adult=false`;
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`TMDB search failed: ${resp.status}`);
   return resp.json();
@@ -123,6 +164,22 @@ export async function discoverMovies(page = 1, withGenres?: string[], sortBy = '
   return resp.json();
 }
 
+export async function discoverSeries(page = 1, withGenres?: string[], sortBy = 'popularity.desc') {
+  if (!tmdbKey()) throw new Error('TMDB API key not configured');
+  const params = new URLSearchParams();
+  params.set('api_key', tmdbKey());
+  params.set('page', String(page));
+  params.set('sort_by', sortBy);
+  if (withGenres && withGenres.length > 0) {
+    params.set('with_genres', withGenres.join(','));
+  }
+
+  const url = `${TMDB_BASE}/discover/tv?${params.toString()}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TMDB tv discover failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function getTrendingMovies(timeWindow: 'day' | 'week' = 'week', page = 1) {
   if (!tmdbKey()) throw new Error('TMDB API key not configured');
   const url = `${TMDB_BASE}/trending/movie/${timeWindow}?api_key=${tmdbKey()}&page=${page}`;
@@ -131,9 +188,22 @@ export async function getTrendingMovies(timeWindow: 'day' | 'week' = 'week', pag
   return resp.json();
 }
 
+export async function getTrendingSeries(timeWindow: 'day' | 'week' = 'week', page = 1) {
+  if (!tmdbKey()) throw new Error('TMDB API key not configured');
+  const url = `${TMDB_BASE}/trending/tv/${timeWindow}?api_key=${tmdbKey()}&page=${page}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TMDB trending tv failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function getNewReleases(page = 1) {
   // Use discover sorted by release date
   return discoverMovies(page, undefined, 'release_date.desc');
+}
+
+export async function getNewSeries(page = 1) {
+  // Use discover sorted by first air date
+  return discoverSeries(page, undefined, 'first_air_date.desc');
 }
 
 let genresCache: Record<string, number> | null = null;
@@ -159,12 +229,40 @@ export async function discoverByGenreName(genreName: string, page = 1) {
   return discoverMovies(page, [String(id)]);
 }
 
+export async function discoverSeriesByGenreName(genreName: string, page = 1) {
+  const map = await getGenreMap();
+  const id = map[genreName.toLowerCase()];
+  if (!id) return { results: [] };
+  return discoverSeries(page, [String(id)]);
+}
+
 export interface TMDBActor {
   id: number;
   name: string;
   character?: string;
   profilePath: string;
   knownForDepartment?: string;
+}
+
+export async function fetchSeriesSeason(tmdbId: number, seasonNumber: number) {
+  if (!tmdbKey()) throw new Error('TMDB API key not configured');
+
+  const url = `${TMDB_BASE}/tv/${tmdbId}/season/${seasonNumber}?api_key=${tmdbKey()}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`TMDB season fetch failed: ${resp.status}`);
+
+  const data = await resp.json();
+  const episodes = Array.isArray(data.episodes) ? data.episodes : [];
+
+  return episodes.map((episode: any) => ({
+    id: episode.id,
+    episodeNumber: episode.episode_number,
+    name: episode.name || `Episode ${episode.episode_number}`,
+    runtime: episode.runtime || null,
+    airDate: episode.air_date || null,
+    overview: episode.overview || '',
+    stillPath: episode.still_path ? IMAGE_BASE + episode.still_path : '',
+  }));
 }
 
 export interface TMDBActorProfile {
@@ -217,14 +315,32 @@ function mapCreditToMovieSummary(credit: any) {
   };
 }
 
-export async function fetchMovieCast(tmdbId: number, limit = 20): Promise<TMDBActor[]> {
+export async function fetchMovieCast(tmdbId: number, limit = 20, preferredMediaPath?: TMDBMediaPath): Promise<TMDBActor[]> {
   if (!tmdbKey()) throw new Error('TMDB API key not configured');
 
-  const url = `${TMDB_BASE}/movie/${tmdbId}/credits?api_key=${tmdbKey()}`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`TMDB cast fetch failed: ${resp.status}`);
+  let data: any;
 
-  const data = await resp.json();
+  const tryOrder: TMDBMediaPath[] = preferredMediaPath
+    ? [preferredMediaPath, preferredMediaPath === 'movie' ? 'tv' : 'movie']
+    : ['movie', 'tv'];
+
+  let lastError: Error | null = null;
+  for (const path of tryOrder) {
+    try {
+      const resp = await fetch(`${TMDB_BASE}/${path}/${tmdbId}/credits?api_key=${tmdbKey()}`);
+      if (!resp.ok) throw new Error(`TMDB ${path} cast fetch failed: ${resp.status}`);
+      data = await resp.json();
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('TMDB cast fetch failed');
+    }
+  }
+
+  if (!data) {
+    throw lastError || new Error('TMDB cast fetch failed');
+  }
+
   const cast = Array.isArray(data.cast) ? data.cast : [];
 
   return cast.slice(0, limit).map((member: any) => ({

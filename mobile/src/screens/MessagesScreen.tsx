@@ -130,6 +130,7 @@ export function MessagesScreen({ route, navigation }: any) {
       <FlatList
         data={messages}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
         contentContainerStyle={messages.length === 0 ? styles.emptyList : undefined}
         renderItem={({ item }) => {
           const isFromMe = item.senderId === user?.id;
@@ -187,7 +188,7 @@ export function MessagesScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0d0f14',
   },
   centerContent: {
     flex: 1,
@@ -214,12 +215,15 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '70%',
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#141924',
+    borderColor: '#2a3040',
+    borderWidth: 1,
     padding: 10,
-    borderRadius: 12,
+    borderRadius: 14,
   },
   messageBubbleMe: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
   },
   message: {
     color: '#fff',
@@ -246,23 +250,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 10,
     paddingVertical: 10,
-    borderTopColor: '#2a2a2a',
+    borderTopColor: '#242a3a',
     borderTopWidth: 1,
+    backgroundColor: '#11131a',
   },
   input: {
     flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderColor: '#444',
+    backgroundColor: '#161b26',
+    borderColor: '#2d3446',
     borderWidth: 1,
     color: '#fff',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 12,
     marginRight: 10,
     maxHeight: 80,
   },
   sendButton: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#ef4444',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
